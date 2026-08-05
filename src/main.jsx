@@ -1111,7 +1111,7 @@ function App() {
     const storagePath = `${userId}/${Date.now()}-${cleanName}`;
 
     const { error: uploadError } = await supabase.storage
-      .from("lab-reports")
+      .from("lab-results")
       .upload(storagePath, labForm.reportFile, {
         contentType: labForm.reportFile.type || undefined,
         upsert: false,
@@ -1119,7 +1119,7 @@ function App() {
 
     if (uploadError) {
       console.error("Could not upload lab report:", uploadError);
-      window.alert("The lab report could not be uploaded. Make sure the lab-reports storage bucket has been created.");
+      window.alert("The lab report could not be uploaded. Make sure the lab-results storage bucket has been created.");
       return;
     }
 
@@ -1143,13 +1143,13 @@ function App() {
     const { error: databaseError } = await query;
     if (databaseError) {
       console.error("Could not save lab result:", databaseError);
-      await supabase.storage.from("lab-reports").remove([storagePath]);
+      await supabase.storage.from("lab-results").remove([storagePath]);
       window.alert("The lab result could not be saved.");
       return;
     }
 
     if (existing?.storagePath) {
-      await supabase.storage.from("lab-reports").remove([existing.storagePath]);
+      await supabase.storage.from("lab-results").remove([existing.storagePath]);
     }
 
     setLabForm(emptyLabResult);
@@ -1181,7 +1181,7 @@ function App() {
     }
 
     if (lab?.storagePath) {
-      await supabase.storage.from("lab-reports").remove([lab.storagePath]);
+      await supabase.storage.from("lab-results").remove([lab.storagePath]);
     }
 
     setSaveMessage("Lab result deleted");
@@ -1197,7 +1197,7 @@ function App() {
   async function viewLabReport(lab) {
     if (lab.storagePath) {
       const { data, error } = await supabase.storage
-        .from("lab-reports")
+        .from("lab-results")
         .createSignedUrl(lab.storagePath, 60);
 
       if (error || !data?.signedUrl) {
