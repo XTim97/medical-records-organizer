@@ -1,0 +1,8 @@
+{
+  "name": "My Medical Records",
+  "short_name": "Medical Records",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#eef6f5",
+  "theme_color": "#0f766e"
+}
