@@ -1195,8 +1195,7 @@ function App() {
   }
 
   async function viewLabReport(lab) {
-    if (lab.storagePath) {
-      const reportWindow = window.open("", "_blank");
+    if (lab.storagePath) {      
       const { data, error } = await supabase.storage
         .from("lab-results")
         .createSignedUrl(lab.storagePath, 60);
@@ -1207,7 +1206,7 @@ function App() {
         return;
       }
 
-      reportWindow.location.href = data.signedUrl;
+     window.location.href = data.signedUrl;
       return;
     }
 
