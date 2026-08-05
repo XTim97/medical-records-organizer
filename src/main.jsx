@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./App.css";
 import "./styles.css";
+import { supabase } from "./supabase";
 const sections = [
   { name: "Personal Information", className: "red" },
   { name: "Insurance Information", className: "orange" },
@@ -161,28 +162,20 @@ function formatDate(date) {
   });
 }
 function App() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [activeSection, setActiveSection] = useState(null);
   const [saveMessage, setSaveMessage] = useState("");
-const [appointments, setAppointments] = useState(() => {
-  const saved = localStorage.getItem("medicalRecordsAppointments");
-  return saved ? JSON.parse(saved) : [];
-});
 
-const [appointmentForm, setAppointmentForm] = useState({
-  date: "",
-  time: "",
-  doctor: "",
-  specialty: "",
-  location: "",
-  reason: "",
-  notes: "",
-});
-const [selectedAppointment, setSelectedAppointment] = useState(null);
-const [editingAppointmentIndex, setEditingAppointmentIndex] = useState(null);
-const closeSelectedAppointment = () => {
-  setSelectedAppointment(null);
-  setEditingAppointmentIndex(null);
-  setAppointmentForm({
+  const [appointments, setAppointments] = useState(() => {
+    const saved = localStorage.getItem("medicalRecordsAppointments");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [appointmentForm, setAppointmentForm] = useState({
     date: "",
     time: "",
     doctor: "",
@@ -191,11 +184,12 @@ const closeSelectedAppointment = () => {
     reason: "",
     notes: "",
   });
-};
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [editingAppointmentIndex, setEditingAppointmentIndex] = useState(null);
+
   const [personalInfo, setPersonalInfo] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsPersonalInfo");
     if (!saved) return emptyPersonalInfo;
-
     try {
       return JSON.parse(saved);
     } catch {
@@ -206,14 +200,12 @@ const closeSelectedAppointment = () => {
   const [insurancePolicies, setInsurancePolicies] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsInsurance");
     if (!saved) return [];
-
     try {
       return JSON.parse(saved);
     } catch {
       return [];
     }
   });
-
   const [insuranceForm, setInsuranceForm] = useState(emptyInsurance);
   const [editingInsuranceIndex, setEditingInsuranceIndex] = useState(null);
   const [showInsuranceForm, setShowInsuranceForm] = useState(false);
@@ -221,14 +213,12 @@ const closeSelectedAppointment = () => {
   const [doctors, setDoctors] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsDoctors");
     if (!saved) return [];
-
     try {
       return JSON.parse(saved);
     } catch {
       return [];
     }
   });
-
   const [doctorForm, setDoctorForm] = useState(emptyDoctor);
   const [editingDoctorIndex, setEditingDoctorIndex] = useState(null);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
@@ -236,26 +226,24 @@ const closeSelectedAppointment = () => {
   const [surgeries, setSurgeries] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsSurgeries");
     if (!saved) return [];
-
     try {
       return JSON.parse(saved);
     } catch {
       return [];
     }
   });
-
   const [surgeryForm, setSurgeryForm] = useState(emptySurgery);
   const [editingSurgeryIndex, setEditingSurgeryIndex] = useState(null);
   const [showSurgeryForm, setShowSurgeryForm] = useState(false);
-const [labResults, setLabResults] = useState([]);
-const [labForm, setLabForm] = useState(emptyLabResult);
-const [editingLabId, setEditingLabId] = useState(null);
-const [showLabForm, setShowLabForm] = useState(false);
+
+  const [labResults, setLabResults] = useState([]);
+  const [labForm, setLabForm] = useState(emptyLabResult);
+  const [editingLabId, setEditingLabId] = useState(null);
+  const [showLabForm, setShowLabForm] = useState(false);
 
   const [notes, setNotes] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsNotes");
     if (!saved) return [];
-
     try {
       return JSON.parse(saved);
     } catch {
@@ -266,123 +254,630 @@ const [showLabForm, setShowLabForm] = useState(false);
   const [editingNoteIndex, setEditingNoteIndex] = useState(null);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [selectedNoteIndex, setSelectedNoteIndex] = useState(null);
-  useEffect(() => {
-    if (!saveMessage) return;
 
-    const timer = setTimeout(() => {
-      setSaveMessage("");
-    }, 2000);
+  function safeDate(value) {
+    return value || null;
+  }
 
-    return () => clearTimeout(timer);
-  }, [saveMessage]);
-useEffect(() => {
-  async function loadLabResults() {
+  function safeTime(value) {
+    return value || null;
+  }
+
+  function personalFromRow(row) {
+    if (!row) return emptyPersonalInfo;
+    return {
+      fullName: row.full_name || "",
+      dateOfBirth: row.date_of_birth || "",
+      address: row.address || "",
+      city: row.city || "",
+      state: row.state || "",
+      zipCode: row.zip_code || "",
+      phoneNumber: row.phone_number || "",
+      emailAddress: row.email_address || "",
+      emergencyContactName: row.emergency_contact_name || "",
+      emergencyContactPhone: row.emergency_contact_phone || "",
+      bloodType: row.blood_type || "",
+      allergies: row.allergies || "",
+    };
+  }
+
+  function personalToRow(info, userId) {
+    return {
+      user_id: userId,
+      full_name: info.fullName || null,
+      date_of_birth: safeDate(info.dateOfBirth),
+      address: info.address || null,
+      city: info.city || null,
+      state: info.state || null,
+      zip_code: info.zipCode || null,
+      phone_number: info.phoneNumber || null,
+      email_address: info.emailAddress || null,
+      emergency_contact_name: info.emergencyContactName || null,
+      emergency_contact_phone: info.emergencyContactPhone || null,
+      blood_type: info.bloodType || null,
+      allergies: info.allergies || null,
+    };
+  }
+
+  function insuranceFromRow(row) {
+    return {
+      id: row.id,
+      insuranceCompany: row.insurance_company || "",
+      planName: row.plan_name || "",
+      memberId: row.member_id || "",
+      groupNumber: row.group_number || "",
+      policyholderName: row.policyholder_name || "",
+      policyholderDob: row.policyholder_dob || "",
+      notes: row.notes || "",
+    };
+  }
+
+  function insuranceToRow(policy, userId) {
+    return {
+      user_id: userId,
+      insurance_company: policy.insuranceCompany || null,
+      plan_name: policy.planName || null,
+      member_id: policy.memberId || null,
+      group_number: policy.groupNumber || null,
+      policyholder_name: policy.policyholderName || null,
+      policyholder_dob: safeDate(policy.policyholderDob),
+      notes: policy.notes || null,
+    };
+  }
+
+  function doctorFromRow(row) {
+    return {
+      id: row.id,
+      doctorName: row.doctor_name || "",
+      specialty: row.specialty || "",
+      officeAddress: row.office_address || "",
+      city: row.city || "",
+      state: row.state || "",
+      zipCode: row.zip_code || "",
+      phoneNumber: row.phone_number || "",
+    };
+  }
+
+  function doctorToRow(doctor, userId) {
+    return {
+      user_id: userId,
+      doctor_name: doctor.doctorName || null,
+      specialty: doctor.specialty || null,
+      office_address: doctor.officeAddress || null,
+      city: doctor.city || null,
+      state: doctor.state || null,
+      zip_code: doctor.zipCode || null,
+      phone_number: doctor.phoneNumber || null,
+    };
+  }
+
+  function surgeryFromRow(row) {
+    return {
+      id: row.id,
+      procedureName: row.procedure_name || "",
+      surgeryDate: row.surgery_date || "",
+      surgeon: row.surgeon || "",
+      facility: row.facility || "",
+      city: row.city || "",
+      state: row.state || "",
+      notes: row.notes || "",
+    };
+  }
+
+  function surgeryToRow(surgery, userId) {
+    return {
+      user_id: userId,
+      procedure_name: surgery.procedureName || null,
+      surgery_date: safeDate(surgery.surgeryDate),
+      surgeon: surgery.surgeon || null,
+      facility: surgery.facility || null,
+      city: surgery.city || null,
+      state: surgery.state || null,
+      notes: surgery.notes || null,
+    };
+  }
+
+  function appointmentFromRow(row) {
+    return {
+      id: row.id,
+      date: row.appointment_date || "",
+      time: row.appointment_time ? row.appointment_time.slice(0, 5) : "",
+      doctor: row.doctor || "",
+      specialty: row.specialty || "",
+      location: row.location || "",
+      reason: row.reason || "",
+      notes: row.notes || "",
+    };
+  }
+
+  function appointmentToRow(appointment, userId) {
+    return {
+      user_id: userId,
+      appointment_date: safeDate(appointment.date),
+      appointment_time: safeTime(appointment.time),
+      doctor: appointment.doctor || null,
+      specialty: appointment.specialty || null,
+      location: appointment.location || null,
+      reason: appointment.reason || null,
+      notes: appointment.notes || null,
+    };
+  }
+
+  function noteFromRow(row) {
+    return {
+      id: row.id,
+      date: row.note_date || "",
+      title: row.title || "",
+      note: row.note || "",
+    };
+  }
+
+  function noteToRow(note, userId) {
+    return {
+      user_id: userId,
+      note_date: safeDate(note.date),
+      title: note.title || null,
+      note: note.note || null,
+    };
+  }
+
+  function labFromRow(row) {
+    return {
+      id: row.id,
+      testDate: row.test_date || "",
+      labName: row.lab_name || "",
+      fileName: row.file_name || "Lab Report",
+      fileType: row.file_type || "",
+      storagePath: row.storage_path || "",
+      reportFile: null,
+    };
+  }
+
+  function cachePersonal(info) {
+    localStorage.setItem("medicalRecordsPersonalInfo", JSON.stringify(info));
+  }
+
+  function cacheInsurance(items) {
+    localStorage.setItem("medicalRecordsInsurance", JSON.stringify(items));
+  }
+
+  function cacheDoctors(items) {
+    localStorage.setItem("medicalRecordsDoctors", JSON.stringify(items));
+  }
+
+  function cacheSurgeries(items) {
+    localStorage.setItem("medicalRecordsSurgeries", JSON.stringify(items));
+  }
+
+  function cacheAppointments(items) {
+    localStorage.setItem("medicalRecordsAppointments", JSON.stringify(items));
+  }
+
+  function cacheNotes(items) {
+    localStorage.setItem("medicalRecordsNotes", JSON.stringify(items));
+  }
+
+  async function loadPersonalInfo(userId) {
+    const { data, error } = await supabase
+      .from("personal_info")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Could not load personal information:", error);
+      return;
+    }
+
+    if (data) {
+      const info = personalFromRow(data);
+      setPersonalInfo(info);
+      cachePersonal(info);
+      return;
+    }
+
+    const local = localStorage.getItem("medicalRecordsPersonalInfo");
+    if (!local) return;
+
     try {
-      const savedLabs = await getAllLabResults();
+      const info = JSON.parse(local);
+      const hasData = Object.values(info).some((value) => String(value || "").trim());
+      if (!hasData) return;
 
-      savedLabs.sort((a, b) =>
-        (b.testDate || "").localeCompare(a.testDate || "")
-      );
+      const { error: insertError } = await supabase
+        .from("personal_info")
+        .upsert(personalToRow(info, userId), { onConflict: "user_id" });
 
-      setLabResults(savedLabs);
+      if (insertError) console.error("Could not migrate personal information:", insertError);
     } catch (error) {
-      console.error("Could not load lab results:", error);
+      console.error("Could not read cached personal information:", error);
     }
   }
 
-  loadLabResults();
-}, []);
+  async function loadInsurance(userId) {
+    const { data, error } = await supabase
+      .from("insurance_policies")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Could not load insurance:", error);
+      return;
+    }
+
+    if (data?.length) {
+      const items = data.map(insuranceFromRow);
+      setInsurancePolicies(items);
+      cacheInsurance(items);
+      return;
+    }
+
+    const local = localStorage.getItem("medicalRecordsInsurance");
+    if (!local) {
+      setInsurancePolicies([]);
+      return;
+    }
+
+    try {
+      const items = JSON.parse(local);
+      if (!Array.isArray(items) || items.length === 0) return;
+      const { error: insertError } = await supabase
+        .from("insurance_policies")
+        .insert(items.map((item) => insuranceToRow(item, userId)));
+      if (insertError) console.error("Could not migrate insurance:", insertError);
+    } catch (error) {
+      console.error("Could not read cached insurance:", error);
+    }
+  }
+
+  async function loadDoctors(userId) {
+    const { data, error } = await supabase
+      .from("doctors")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Could not load doctors:", error);
+      return;
+    }
+
+    if (data?.length) {
+      const items = data.map(doctorFromRow);
+      setDoctors(items);
+      cacheDoctors(items);
+      return;
+    }
+
+    const local = localStorage.getItem("medicalRecordsDoctors");
+    if (!local) {
+      setDoctors([]);
+      return;
+    }
+
+    try {
+      const items = JSON.parse(local);
+      if (!Array.isArray(items) || items.length === 0) return;
+      const { error: insertError } = await supabase
+        .from("doctors")
+        .insert(items.map((item) => doctorToRow(item, userId)));
+      if (insertError) console.error("Could not migrate doctors:", insertError);
+    } catch (error) {
+      console.error("Could not read cached doctors:", error);
+    }
+  }
+
+  async function loadSurgeries(userId) {
+    const { data, error } = await supabase
+      .from("surgeries")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Could not load surgeries:", error);
+      return;
+    }
+
+    if (data?.length) {
+      const items = data.map(surgeryFromRow);
+      setSurgeries(items);
+      cacheSurgeries(items);
+      return;
+    }
+
+    const local = localStorage.getItem("medicalRecordsSurgeries");
+    if (!local) {
+      setSurgeries([]);
+      return;
+    }
+
+    try {
+      const items = JSON.parse(local);
+      if (!Array.isArray(items) || items.length === 0) return;
+      const { error: insertError } = await supabase
+        .from("surgeries")
+        .insert(items.map((item) => surgeryToRow(item, userId)));
+      if (insertError) console.error("Could not migrate surgeries:", insertError);
+    } catch (error) {
+      console.error("Could not read cached surgeries:", error);
+    }
+  }
+
+  async function loadAppointments(userId) {
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("user_id", userId)
+      .order("appointment_date", { ascending: true })
+      .order("appointment_time", { ascending: true });
+
+    if (error) {
+      console.error("Could not load appointments:", error);
+      return;
+    }
+
+    if (data?.length) {
+      const items = data.map(appointmentFromRow);
+      setAppointments(items);
+      cacheAppointments(items);
+      return;
+    }
+
+    const local = localStorage.getItem("medicalRecordsAppointments");
+    if (!local) {
+      setAppointments([]);
+      return;
+    }
+
+    try {
+      const items = JSON.parse(local);
+      if (!Array.isArray(items) || items.length === 0) return;
+      const { error: insertError } = await supabase
+        .from("appointments")
+        .insert(items.map((item) => appointmentToRow(item, userId)));
+      if (insertError) console.error("Could not migrate appointments:", insertError);
+    } catch (error) {
+      console.error("Could not read cached appointments:", error);
+    }
+  }
+
+  async function loadNotes(userId) {
+    const { data, error } = await supabase
+      .from("notes")
+      .select("*")
+      .eq("user_id", userId)
+      .order("note_date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Could not load notes:", error);
+      return;
+    }
+
+    if (data?.length) {
+      const items = data.map(noteFromRow);
+      setNotes(items);
+      cacheNotes(items);
+      return;
+    }
+
+    const local = localStorage.getItem("medicalRecordsNotes");
+    if (!local) {
+      setNotes([]);
+      return;
+    }
+
+    try {
+      const items = JSON.parse(local);
+      if (!Array.isArray(items) || items.length === 0) return;
+      const { error: insertError } = await supabase
+        .from("notes")
+        .insert(items.map((item) => noteToRow(item, userId)));
+      if (insertError) console.error("Could not migrate notes:", insertError);
+    } catch (error) {
+      console.error("Could not read cached notes:", error);
+    }
+  }
+
+  async function loadLabResults(userId) {
+    const { data, error } = await supabase
+      .from("lab_results")
+      .select("*")
+      .eq("user_id", userId)
+      .order("test_date", { ascending: false });
+
+    if (error) {
+      console.error("Could not load lab results:", error);
+      return;
+    }
+
+    if (data?.length) {
+      setLabResults(data.map(labFromRow));
+      return;
+    }
+
+    try {
+      const localLabs = await getAllLabResults();
+      localLabs.sort((a, b) => (b.testDate || "").localeCompare(a.testDate || ""));
+      setLabResults(localLabs);
+    } catch (indexedDbError) {
+      console.error("Could not load local lab results:", indexedDbError);
+      setLabResults([]);
+    }
+  }
+
+  async function initializeCloudData(userId) {
+    await Promise.all([
+      loadPersonalInfo(userId),
+      loadInsurance(userId),
+      loadDoctors(userId),
+      loadSurgeries(userId),
+      loadAppointments(userId),
+      loadNotes(userId),
+      loadLabResults(userId),
+    ]);
+  }
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return undefined;
+
+    initializeCloudData(userId);
+
+    const channel = supabase
+      .channel(`medical-records-sync-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "personal_info", filter: `user_id=eq.${userId}` }, () => loadPersonalInfo(userId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "insurance_policies", filter: `user_id=eq.${userId}` }, () => loadInsurance(userId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "doctors", filter: `user_id=eq.${userId}` }, () => loadDoctors(userId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "surgeries", filter: `user_id=eq.${userId}` }, () => loadSurgeries(userId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "lab_results", filter: `user_id=eq.${userId}` }, () => loadLabResults(userId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments", filter: `user_id=eq.${userId}` }, () => loadAppointments(userId))
+      .on("postgres_changes", { event: "*", schema: "public", table: "notes", filter: `user_id=eq.${userId}` }, () => loadNotes(userId))
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!saveMessage) return undefined;
+    const timer = setTimeout(() => setSaveMessage(""), 2000);
+    return () => clearTimeout(timer);
+  }, [saveMessage]);
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    setLoginError("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
+      password: loginPassword,
+    });
+
+    if (error) setLoginError(error.message);
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    setActiveSection(null);
+    setLoginPassword("");
+  }
+
   function handlePersonalChange(event) {
     const { name, value } = event.target;
-
-    setPersonalInfo((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    setPersonalInfo((current) => ({ ...current, [name]: value }));
   }
 
-  function savePersonalInfo() {
-    localStorage.setItem(
-      "medicalRecordsPersonalInfo",
-      JSON.stringify(personalInfo)
-    );
+  async function savePersonalInfo() {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setSaveMessage("You must be signed in.");
+      return;
+    }
 
+    const { error } = await supabase
+      .from("personal_info")
+      .upsert(personalToRow(personalInfo, userId), { onConflict: "user_id" });
+
+    if (error) {
+      console.error("Error saving personal information:", error);
+      setSaveMessage("Could not save.");
+      return;
+    }
+
+    cachePersonal(personalInfo);
+    setSaveMessage("Saved.");
+  }
+
+  const closeSelectedAppointment = () => {
+    setSelectedAppointment(null);
+    setEditingAppointmentIndex(null);
+    setAppointmentForm({
+      date: "",
+      time: "",
+      doctor: "",
+      specialty: "",
+      location: "",
+      reason: "",
+      notes: "",
+    });
+  };
+
+  async function deleteAppointment(appointmentToDelete) {
+    if (!window.confirm("Delete this appointment?")) return;
+
+    const { error } = await supabase
+      .from("appointments")
+      .delete()
+      .eq("id", appointmentToDelete.id);
+
+    if (error) {
+      console.error("Could not delete appointment:", error);
+      setSaveMessage("Could not delete appointment.");
+      return;
+    }
+
+    closeSelectedAppointment();
+    setSaveMessage("Appointment deleted");
+    await loadAppointments(session.user.id);
+  }
+
+  async function saveAppointment() {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    const editing = editingAppointmentIndex !== null
+      ? appointments[editingAppointmentIndex]
+      : null;
+
+    let query;
+    if (editing?.id) {
+      query = supabase
+        .from("appointments")
+        .update(appointmentToRow(appointmentForm, userId))
+        .eq("id", editing.id);
+    } else {
+      query = supabase
+        .from("appointments")
+        .insert(appointmentToRow(appointmentForm, userId));
+    }
+
+    const { error } = await query;
+    if (error) {
+      console.error("Could not save appointment:", error);
+      setSaveMessage("Could not save appointment.");
+      return;
+    }
+
+    setAppointmentForm({ date: "", time: "", doctor: "", specialty: "", location: "", reason: "", notes: "" });
+    setEditingAppointmentIndex(null);
+    setSelectedAppointment(null);
     setSaveMessage("Saved");
+    await loadAppointments(userId);
   }
-function deleteAppointment(appointmentToDelete) {
-  if (!window.confirm("Delete this appointment?")) {
-  return;
-}
-  const updatedAppointments = appointments.filter(
-    (appointment) => appointment !== appointmentToDelete
-  );
-
-  setAppointments(updatedAppointments);
-
-  localStorage.setItem(
-    "medicalRecordsAppointments",
-    JSON.stringify(updatedAppointments)
-  );
-
-  setSelectedAppointment(null);
-  setEditingAppointmentIndex(null);
-
-  setAppointmentForm({
-    date: "",
-    time: "",
-    doctor: "",
-    specialty: "",
-    location: "",
-    reason: "",
-    notes: "",
-  });
-
-  setSaveMessage("Appointment deleted");
-}
-  function saveAppointment() {    
-  const updatedAppointments =
-  editingAppointmentIndex !== null
-    ? appointments.map((appointment, index) =>
-        index === editingAppointmentIndex ? appointmentForm : appointment
-      )
-    : [...appointments, appointmentForm];
-
-  setAppointments(updatedAppointments);
-
-  localStorage.setItem(
-    "medicalRecordsAppointments",
-    JSON.stringify(updatedAppointments)    
-  );
-setAppointmentForm({
-  date: "",
-  time: "",
-  doctor: "",
-  specialty: "",
-  location: "",
-  reason: "",
-  notes: "",
-});
-  setEditingAppointmentIndex(null);
-
-  setSaveMessage("Saved");
-}
 
   function handleInsuranceChange(event) {
     const { name, value } = event.target;
-
-    setInsuranceForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  }
-
-  function saveInsurancePolicies(updatedPolicies) {
-    setInsurancePolicies(updatedPolicies);
-
-    localStorage.setItem(
-      "medicalRecordsInsurance",
-      JSON.stringify(updatedPolicies)
-    );
+    setInsuranceForm((current) => ({ ...current, [name]: value }));
   }
 
   function addInsurance() {
@@ -391,22 +886,38 @@ setAppointmentForm({
     setShowInsuranceForm(true);
   }
 
-  function saveInsurance() {
-    let updatedPolicies;
+  async function saveInsurance() {
+    const userId = session?.user?.id;
+    if (!userId) return;
 
-    if (editingInsuranceIndex === null) {
-      updatedPolicies = [...insurancePolicies, insuranceForm];
+    const editing = editingInsuranceIndex !== null
+      ? insurancePolicies[editingInsuranceIndex]
+      : null;
+
+    let query;
+    if (editing?.id) {
+      query = supabase
+        .from("insurance_policies")
+        .update(insuranceToRow(insuranceForm, userId))
+        .eq("id", editing.id);
     } else {
-      updatedPolicies = insurancePolicies.map((policy, index) =>
-        index === editingInsuranceIndex ? insuranceForm : policy
-      );
+      query = supabase
+        .from("insurance_policies")
+        .insert(insuranceToRow(insuranceForm, userId));
     }
 
-    saveInsurancePolicies(updatedPolicies);
+    const { error } = await query;
+    if (error) {
+      console.error("Could not save insurance:", error);
+      setSaveMessage("Could not save insurance.");
+      return;
+    }
+
     setInsuranceForm(emptyInsurance);
     setEditingInsuranceIndex(null);
     setShowInsuranceForm(false);
     setSaveMessage("Insurance saved");
+    await loadInsurance(userId);
   }
 
   function editInsurance(index) {
@@ -415,18 +926,19 @@ setAppointmentForm({
     setShowInsuranceForm(true);
   }
 
-  function deleteInsurance(index) {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this insurance policy?"
-    );
+  async function deleteInsurance(index) {
+    if (!window.confirm("Are you sure you want to delete this insurance policy?")) return;
 
-    if (!confirmed) return;
+    const policy = insurancePolicies[index];
+    const { error } = await supabase.from("insurance_policies").delete().eq("id", policy.id);
+    if (error) {
+      console.error("Could not delete insurance:", error);
+      setSaveMessage("Could not delete insurance.");
+      return;
+    }
 
-    const updatedPolicies = insurancePolicies.filter(
-      (_, policyIndex) => policyIndex !== index
-    );
-
-    saveInsurancePolicies(updatedPolicies);
+    setSaveMessage("Insurance deleted");
+    await loadInsurance(session.user.id);
   }
 
   function cancelInsuranceEdit() {
@@ -437,20 +949,7 @@ setAppointmentForm({
 
   function handleDoctorChange(event) {
     const { name, value } = event.target;
-
-    setDoctorForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  }
-
-  function saveDoctors(updatedDoctors) {
-    setDoctors(updatedDoctors);
-
-    localStorage.setItem(
-      "medicalRecordsDoctors",
-      JSON.stringify(updatedDoctors)
-    );
+    setDoctorForm((current) => ({ ...current, [name]: value }));
   }
 
   function addDoctor() {
@@ -459,22 +958,30 @@ setAppointmentForm({
     setShowDoctorForm(true);
   }
 
-  function saveDoctor() {
-    let updatedDoctors;
+  async function saveDoctor() {
+    const userId = session?.user?.id;
+    if (!userId) return;
 
-    if (editingDoctorIndex === null) {
-      updatedDoctors = [...doctors, doctorForm];
+    const editing = editingDoctorIndex !== null ? doctors[editingDoctorIndex] : null;
+    let query;
+    if (editing?.id) {
+      query = supabase.from("doctors").update(doctorToRow(doctorForm, userId)).eq("id", editing.id);
     } else {
-      updatedDoctors = doctors.map((doctor, index) =>
-        index === editingDoctorIndex ? doctorForm : doctor
-      );
+      query = supabase.from("doctors").insert(doctorToRow(doctorForm, userId));
     }
 
-    saveDoctors(updatedDoctors);
+    const { error } = await query;
+    if (error) {
+      console.error("Could not save doctor:", error);
+      setSaveMessage("Could not save doctor.");
+      return;
+    }
+
     setDoctorForm(emptyDoctor);
     setEditingDoctorIndex(null);
     setShowDoctorForm(false);
     setSaveMessage("Doctor saved");
+    await loadDoctors(userId);
   }
 
   function editDoctor(index) {
@@ -483,18 +990,19 @@ setAppointmentForm({
     setShowDoctorForm(true);
   }
 
-  function deleteDoctor(index) {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this doctor?"
-    );
+  async function deleteDoctor(index) {
+    if (!window.confirm("Are you sure you want to delete this doctor?")) return;
 
-    if (!confirmed) return;
+    const doctor = doctors[index];
+    const { error } = await supabase.from("doctors").delete().eq("id", doctor.id);
+    if (error) {
+      console.error("Could not delete doctor:", error);
+      setSaveMessage("Could not delete doctor.");
+      return;
+    }
 
-    const updatedDoctors = doctors.filter(
-      (_, doctorIndex) => doctorIndex !== index
-    );
-
-    saveDoctors(updatedDoctors);
+    setSaveMessage("Doctor deleted");
+    await loadDoctors(session.user.id);
   }
 
   function cancelDoctorEdit() {
@@ -505,20 +1013,7 @@ setAppointmentForm({
 
   function handleSurgeryChange(event) {
     const { name, value } = event.target;
-
-    setSurgeryForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  }
-
-  function saveSurgeries(updatedSurgeries) {
-    setSurgeries(updatedSurgeries);
-
-    localStorage.setItem(
-      "medicalRecordsSurgeries",
-      JSON.stringify(updatedSurgeries)
-    );
+    setSurgeryForm((current) => ({ ...current, [name]: value }));
   }
 
   function addSurgery() {
@@ -527,22 +1022,30 @@ setAppointmentForm({
     setShowSurgeryForm(true);
   }
 
-  function saveSurgery() {
-    let updatedSurgeries;
+  async function saveSurgery() {
+    const userId = session?.user?.id;
+    if (!userId) return;
 
-    if (editingSurgeryIndex === null) {
-      updatedSurgeries = [...surgeries, surgeryForm];
+    const editing = editingSurgeryIndex !== null ? surgeries[editingSurgeryIndex] : null;
+    let query;
+    if (editing?.id) {
+      query = supabase.from("surgeries").update(surgeryToRow(surgeryForm, userId)).eq("id", editing.id);
     } else {
-      updatedSurgeries = surgeries.map((surgery, index) =>
-        index === editingSurgeryIndex ? surgeryForm : surgery
-      );
+      query = supabase.from("surgeries").insert(surgeryToRow(surgeryForm, userId));
     }
 
-    saveSurgeries(updatedSurgeries);
+    const { error } = await query;
+    if (error) {
+      console.error("Could not save surgery:", error);
+      setSaveMessage("Could not save surgery.");
+      return;
+    }
+
     setSurgeryForm(emptySurgery);
     setEditingSurgeryIndex(null);
     setShowSurgeryForm(false);
     setSaveMessage("Surgery saved");
+    await loadSurgeries(userId);
   }
 
   function editSurgery(index) {
@@ -551,18 +1054,19 @@ setAppointmentForm({
     setShowSurgeryForm(true);
   }
 
-  function deleteSurgery(index) {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this surgery?"
-    );
+  async function deleteSurgery(index) {
+    if (!window.confirm("Are you sure you want to delete this surgery?")) return;
 
-    if (!confirmed) return;
+    const surgery = surgeries[index];
+    const { error } = await supabase.from("surgeries").delete().eq("id", surgery.id);
+    if (error) {
+      console.error("Could not delete surgery:", error);
+      setSaveMessage("Could not delete surgery.");
+      return;
+    }
 
-    const updatedSurgeries = surgeries.filter(
-      (_, surgeryIndex) => surgeryIndex !== index
-    );
-
-    saveSurgeries(updatedSurgeries);
+    setSaveMessage("Surgery deleted");
+    await loadSurgeries(session.user.id);
   }
 
   function cancelSurgeryEdit() {
@@ -570,136 +1074,155 @@ setAppointmentForm({
     setEditingSurgeryIndex(null);
     setShowSurgeryForm(false);
   }
-function handleLabChange(event) {
-  const { name, value } = event.target;
 
-  setLabForm((current) => ({
-    ...current,
-    [name]: value,
-  }));
-}
-
-function handleLabFileChange(event) {
-  const file = event.target.files?.[0] || null;
-
-  if (!file) return;
-
-  setLabForm((current) => ({
-    ...current,
-    reportFile: file,
-  }));
-}
-
-function addLabResult() {
-  setLabForm(emptyLabResult);
-  setEditingLabId(null);
-  setShowLabForm(true);
-}
-
-async function saveLabResult() {
-  if (!labForm.testDate || !labForm.labName) {
-    window.alert("Please enter the date of test and lab name.");
-    return;
+  function handleLabChange(event) {
+    const { name, value } = event.target;
+    setLabForm((current) => ({ ...current, [name]: value }));
   }
 
-  if (!labForm.reportFile) {
-    window.alert("Please attach the lab report.");
-    return;
+  function handleLabFileChange(event) {
+    const file = event.target.files?.[0] || null;
+    if (!file) return;
+    setLabForm((current) => ({ ...current, reportFile: file }));
   }
 
-  try {
-    const record = {
-      testDate: labForm.testDate,
-      labName: labForm.labName,
-      reportFile: labForm.reportFile,
-      fileName: labForm.reportFile.name || "Lab Report",
-      fileType: labForm.reportFile.type || "",
-    };
+  function addLabResult() {
+    setLabForm(emptyLabResult);
+    setEditingLabId(null);
+    setShowLabForm(true);
+  }
 
-    if (editingLabId !== null) {
-      record.id = editingLabId;
+  async function saveLabResult() {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    if (!labForm.testDate || !labForm.labName) {
+      window.alert("Please enter the date of test and lab name.");
+      return;
     }
 
-    await saveLabResultToDatabase(record);
+    if (!labForm.reportFile) {
+      window.alert("Please attach the lab report.");
+      return;
+    }
 
-    const updatedLabs = await getAllLabResults();
+    const originalName = labForm.reportFile.name || "lab-report";
+    const cleanName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storagePath = `${userId}/${Date.now()}-${cleanName}`;
 
-    updatedLabs.sort((a, b) =>
-      (b.testDate || "").localeCompare(a.testDate || "")
-    );
+    const { error: uploadError } = await supabase.storage
+      .from("lab-reports")
+      .upload(storagePath, labForm.reportFile, {
+        contentType: labForm.reportFile.type || undefined,
+        upsert: false,
+      });
 
-    setLabResults(updatedLabs);
+    if (uploadError) {
+      console.error("Could not upload lab report:", uploadError);
+      window.alert("The lab report could not be uploaded. Make sure the lab-reports storage bucket has been created.");
+      return;
+    }
+
+    const payload = {
+      user_id: userId,
+      test_date: safeDate(labForm.testDate),
+      lab_name: labForm.labName || null,
+      file_name: originalName,
+      file_type: labForm.reportFile.type || null,
+      storage_path: storagePath,
+    };
+
+    const existing = editingLabId ? labResults.find((lab) => lab.id === editingLabId) : null;
+    let query;
+    if (editingLabId) {
+      query = supabase.from("lab_results").update(payload).eq("id", editingLabId);
+    } else {
+      query = supabase.from("lab_results").insert(payload);
+    }
+
+    const { error: databaseError } = await query;
+    if (databaseError) {
+      console.error("Could not save lab result:", databaseError);
+      await supabase.storage.from("lab-reports").remove([storagePath]);
+      window.alert("The lab result could not be saved.");
+      return;
+    }
+
+    if (existing?.storagePath) {
+      await supabase.storage.from("lab-reports").remove([existing.storagePath]);
+    }
+
     setLabForm(emptyLabResult);
     setEditingLabId(null);
     setShowLabForm(false);
     setSaveMessage("Lab result saved");
-  } catch (error) {
-    console.error(error);
-    window.alert("The lab result could not be saved.");
+    await loadLabResults(userId);
   }
-}
 
-function editLabResult(lab) {
-  setLabForm({
-    testDate: lab.testDate,
-    labName: lab.labName,
-    reportFile: lab.reportFile,
-  });
-
-  setEditingLabId(lab.id);
-  setShowLabForm(true);
-}
-
-async function deleteLabResult(id) {
-  const confirmed = window.confirm(
-    "Are you sure you want to delete this lab result and its attached report?"
-  );
-
-  if (!confirmed) return;
-
-  try {
-    await deleteLabResultFromDatabase(id);
-
-    setLabResults((current) =>
-      current.filter((lab) => lab.id !== id)
-    );
-  } catch (error) {
-    console.error(error);
-    window.alert("The lab result could not be deleted.");
+  function editLabResult(lab) {
+    setLabForm({
+      testDate: lab.testDate,
+      labName: lab.labName,
+      reportFile: null,
+    });
+    setEditingLabId(lab.id);
+    setShowLabForm(true);
   }
-}
 
-function cancelLabEdit() {
-  setLabForm(emptyLabResult);
-  setEditingLabId(null);
-  setShowLabForm(false);
-}
+  async function deleteLabResult(id) {
+    if (!window.confirm("Are you sure you want to delete this lab result and its attached report?")) return;
 
-function viewLabReport(lab) {
-  if (!lab.reportFile) {
+    const lab = labResults.find((item) => item.id === id);
+    const { error } = await supabase.from("lab_results").delete().eq("id", id);
+    if (error) {
+      console.error("Could not delete lab result:", error);
+      window.alert("The lab result could not be deleted.");
+      return;
+    }
+
+    if (lab?.storagePath) {
+      await supabase.storage.from("lab-reports").remove([lab.storagePath]);
+    }
+
+    setSaveMessage("Lab result deleted");
+    await loadLabResults(session.user.id);
+  }
+
+  function cancelLabEdit() {
+    setLabForm(emptyLabResult);
+    setEditingLabId(null);
+    setShowLabForm(false);
+  }
+
+  async function viewLabReport(lab) {
+    if (lab.storagePath) {
+      const { data, error } = await supabase.storage
+        .from("lab-reports")
+        .createSignedUrl(lab.storagePath, 60);
+
+      if (error || !data?.signedUrl) {
+        console.error("Could not open lab report:", error);
+        window.alert("The lab report could not be opened.");
+        return;
+      }
+
+      window.open(data.signedUrl, "_blank");
+      return;
+    }
+
+    if (lab.reportFile) {
+      const url = URL.createObjectURL(lab.reportFile);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return;
+    }
+
     window.alert("No report is attached.");
-    return;
   }
 
-  const url = URL.createObjectURL(lab.reportFile);
-  window.open(url, "_blank");
-
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 60000);
-}
   function handleNoteChange(event) {
     const { name, value } = event.target;
-
-    setNoteForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  }
-
-  function saveNotes(updatedNotes) {
-    setNotes(updatedNotes);
-    localStorage.setItem("medicalRecordsNotes", JSON.stringify(updatedNotes));
+    setNoteForm((current) => ({ ...current, [name]: value }));
   }
 
   function addNote() {
@@ -709,7 +1232,10 @@ function viewLabReport(lab) {
     setShowNoteForm(true);
   }
 
-  function saveNote() {
+  async function saveNote() {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
     if (!noteForm.date || !noteForm.title.trim() || !noteForm.note.trim()) {
       window.alert("Please enter a date, title, and note.");
       return;
@@ -721,18 +1247,27 @@ function viewLabReport(lab) {
       note: noteForm.note.trim(),
     };
 
-    const updatedNotes =
-      editingNoteIndex === null
-        ? [...notes, noteToSave]
-        : notes.map((note, index) =>
-            index === editingNoteIndex ? noteToSave : note
-          );
+    const editing = editingNoteIndex !== null ? notes[editingNoteIndex] : null;
+    let query;
+    if (editing?.id) {
+      query = supabase.from("notes").update(noteToRow(noteToSave, userId)).eq("id", editing.id);
+    } else {
+      query = supabase.from("notes").insert(noteToRow(noteToSave, userId));
+    }
 
-    saveNotes(updatedNotes);
+    const { error } = await query;
+    if (error) {
+      console.error("Could not save note:", error);
+      setSaveMessage("Could not save note.");
+      return;
+    }
+
     setNoteForm(emptyNote);
     setEditingNoteIndex(null);
     setShowNoteForm(false);
+    setSelectedNoteIndex(null);
     setSaveMessage("Note saved");
+    await loadNotes(userId);
   }
 
   function editNote(index) {
@@ -742,24 +1277,22 @@ function viewLabReport(lab) {
     setShowNoteForm(true);
   }
 
-  function deleteNote(index) {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this note?"
-    );
+  async function deleteNote(index) {
+    if (!window.confirm("Are you sure you want to delete this note?")) return;
 
-    if (!confirmed) return;
-
-    const updatedNotes = notes.filter((_, noteIndex) => noteIndex !== index);
-    saveNotes(updatedNotes);
-
-    if (editingNoteIndex === index) {
-      setNoteForm(emptyNote);
-      setEditingNoteIndex(null);
-      setShowNoteForm(false);
+    const note = notes[index];
+    const { error } = await supabase.from("notes").delete().eq("id", note.id);
+    if (error) {
+      console.error("Could not delete note:", error);
+      setSaveMessage("Could not delete note.");
+      return;
     }
 
     setSelectedNoteIndex(null);
+    setEditingNoteIndex(null);
+    setShowNoteForm(false);
     setSaveMessage("Note deleted");
+    await loadNotes(session.user.id);
   }
 
   function cancelNoteEdit() {
@@ -772,6 +1305,58 @@ function viewLabReport(lab) {
     setSelectedNoteIndex(null);
   }
 
+if (authLoading) {
+  return (
+    <main className="app">
+      <h1>My Medical Records</h1>
+      <p>Loading...</p>
+    </main>
+  );
+}
+
+if (!session) {
+  return (
+    <main className="app">
+      <h1>My Medical Records</h1>
+
+      <div className="form-card">
+        <h2>Sign In</h2>
+
+        <form onSubmit={handleLogin}>
+          <label>
+            Email
+            <input
+              type="email"
+              value={loginEmail}
+              onChange={(event) => setLoginEmail(event.target.value)}
+              required
+            />
+          </label>
+
+          <label>
+            Password
+            <input
+              type="password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              required
+            />
+          </label>
+
+          <button className="save-button" type="submit">
+            Sign In
+          </button>
+        </form>
+
+        {loginError && (
+          <div className="save-message">
+            {loginError}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
   if (activeSection?.name === "Personal Information") {
     return (
       <main className="app">
@@ -1858,6 +2443,9 @@ return (
         
     </div>
 
+    <button className="cancel-button" type="button" onClick={handleSignOut}>
+      Sign Out
+    </button>
 
   </main>
   );
