@@ -1,0 +1,345 @@
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f3f4f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app {
+  min-height: 100vh;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1 {
+  margin: 10px 0 28px;
+  font-size: 2.2rem;
+  text-align: center;
+}
+
+.section-buttons {
+  width: min(100%, 700px);
+  display: grid;
+  gap: 16px;
+}
+
+.section-button {
+  width: 100%;
+  min-height: 72px;
+  border: none;
+  border-radius: 18px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+}
+
+.section-button:active {
+  transform: scale(0.98);
+}
+
+.red {
+  background: #ef4444;
+  color: white;
+}
+
+.orange {
+  background: #f97316;
+  color: white;
+}
+
+.yellow {
+  background: #facc15;
+  color: #111827;
+}
+
+.green {
+  background: #22c55e;
+  color: white;
+}
+
+.blue {
+  background: #3b82f6;
+  color: white;
+}
+
+.indigo {
+  background: #6366f1;
+  color: white;
+}
+
+.violet {
+  background: #a855f7;
+  color: white;
+}
+
+@media (min-width: 800px) {
+  .section-button {
+    min-height: 84px;
+    font-size: 1.5rem;
+  }
+}
+.back-button {
+  align-self: flex-start;
+  margin-bottom: 20px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  background: #111827;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.blank-section {
+  width: min(100%, 700px);
+  min-height: 300px;
+  border-radius: 18px;
+  margin-top: 20px;
+  opacity: 0.18;
+}
+.form-card {
+  width: min(100%, 700px);
+  background: white;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.form-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 18px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.form-card input,
+.form-card textarea {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.form-card textarea {
+  resize: vertical;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.2fr;
+  gap: 12px;
+}
+
+.save-button {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 12px;
+  background: #16a34a;
+  color: white;
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save-button:active {
+  transform: scale(0.98);
+}
+
+.save-message {
+  margin-top: 12px;
+  text-align: center;
+  font-weight: 700;
+  color: #15803d;
+}
+
+@media (max-width: 600px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-card {
+    padding: 18px;
+  }
+}
+.add-button {
+  width: min(100%, 700px);
+  margin-bottom: 20px;
+  padding: 16px;
+  border: none;
+  border-radius: 14px;
+  background: #f97316;
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.insurance-card {
+  width: min(100%, 700px);
+  background: white;
+  border-radius: 18px;
+  padding: 22px;
+  margin-bottom: 18px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.insurance-card h2 {
+  margin-top: 0;
+}
+
+.insurance-card p {
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.card-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.edit-button,
+.delete-button,
+.cancel-button {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.edit-button {
+  background: #2563eb;
+  color: white;
+}
+
+.delete-button {
+  background: #dc2626;
+  color: white;
+}
+
+.cancel-button {
+  width: 100%;
+  margin-top: 10px;
+  background: #64748b;
+  color: white;
+}
+
+.empty-message {
+  width: min(100%, 700px);
+  padding: 22px;
+  background: white;
+  border-radius: 16px;
+  text-align: center;
+  color: #64748b;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+.doctors-add-button {
+  background: #facc15;
+  color: #111827;
+}
+
+.doctor-card {
+  width: min(100%, 700px);
+  background: white;
+  border-radius: 18px;
+  padding: 22px;
+  margin-bottom: 18px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.doctor-card h2 {
+  margin-top: 0;
+}
+
+.doctor-card p {
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.surgeries-add-button {
+  background: #22c55e;
+  color: white;
+}
+
+.surgery-card {
+  width: min(100%, 700px);
+  background: white;
+  border-radius: 18px;
+  padding: 22px;
+  margin-bottom: 18px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.surgery-card h2 {
+  margin-top: 0;
+}
+
+.surgery-card p {
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+/* Lab Results */
+
+.lab-card {
+  width: min(100%, 700px);
+  background: white;
+  border-radius: 18px;
+  padding: 22px;
+  margin-bottom: 18px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.lab-card h2 {
+  margin-top: 0;
+}
+
+.lab-card p {
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.labs-add-button {
+  background: #3b82f6;
+  color: white;
+}
+
+.view-report-button {
+  width: 100%;
+  margin-top: 16px;
+  padding: 14px 18px;
+  border: none;
+  border-radius: 12px;
+  background: #16a34a;
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.view-report-button:active {
+  transform: scale(0.98);
+}
+
+.selected-file {
+  margin: 4px 0 18px;
+  padding: 12px;
+  background: #f3f4f6;
+  border-radius: 10px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
