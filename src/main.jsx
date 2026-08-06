@@ -209,6 +209,14 @@ function App() {
   const [insuranceForm, setInsuranceForm] = useState(emptyInsurance);
   const [editingInsuranceIndex, setEditingInsuranceIndex] = useState(null);
   const [showInsuranceForm, setShowInsuranceForm] = useState(false);
+  const [showInsuranceDocument, setShowInsuranceDocument] = useState(false);
+  const [documentPolicy, setDocumentPolicy] = useState(null);
+  const [insuranceDocumentFile, setInsuranceDocumentFile] = useState(null);
+  const [insuranceDocumentName, setInsuranceDocumentName] = useState("");
+  const [savedInsuranceDocuments, setSavedInsuranceDocuments] = useState([]);
+  const [selectedInsuranceDocument, setSelectedInsuranceDocument] = useState(null);
+  const [insuranceDocumentPreviewUrl, setInsuranceDocumentPreviewUrl] = useState("");
+  const [insuranceDocumentBusy, setInsuranceDocumentBusy] = useState(false);
 
   const [doctors, setDoctors] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsDoctors");
@@ -240,6 +248,14 @@ function App() {
   const [labForm, setLabForm] = useState(emptyLabResult);
   const [editingLabId, setEditingLabId] = useState(null);
   const [showLabForm, setShowLabForm] = useState(false);
+  const [showLabDocument, setShowLabDocument] = useState(false);
+  const [documentLab, setDocumentLab] = useState(null);
+  const [labDocumentFile, setLabDocumentFile] = useState(null);
+  const [labDocumentName, setLabDocumentName] = useState("");
+  const [savedLabDocuments, setSavedLabDocuments] = useState([]);
+  const [selectedLabDocument, setSelectedLabDocument] = useState(null);
+  const [labDocumentPreviewUrl, setLabDocumentPreviewUrl] = useState("");
+  const [labDocumentBusy, setLabDocumentBusy] = useState(false);
 
   const [notes, setNotes] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsNotes");
@@ -254,6 +270,14 @@ function App() {
   const [editingNoteIndex, setEditingNoteIndex] = useState(null);
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [selectedNoteIndex, setSelectedNoteIndex] = useState(null);
+  const [showNoteDocument, setShowNoteDocument] = useState(false);
+  const [documentNote, setDocumentNote] = useState(null);
+  const [noteDocumentFile, setNoteDocumentFile] = useState(null);
+  const [noteDocumentName, setNoteDocumentName] = useState("");
+  const [savedNoteDocuments, setSavedNoteDocuments] = useState([]);
+  const [selectedNoteDocument, setSelectedNoteDocument] = useState(null);
+  const [noteDocumentPreviewUrl, setNoteDocumentPreviewUrl] = useState("");
+  const [noteDocumentBusy, setNoteDocumentBusy] = useState(false);
 
   function safeDate(value) {
     return value || null;
@@ -947,6 +971,240 @@ function App() {
     setShowInsuranceForm(false);
   }
 
+
+  function displayInsuranceDocumentName(storedName) {
+    if (!storedName) return "Document";
+    const withoutTimestamp = storedName.replace(/^\d+-/, "");
+    const lastDot = withoutTimestamp.lastIndexOf(".");
+    const baseName = lastDot > 0 ? withoutTimestamp.slice(0, lastDot) : withoutTimestamp;
+    return baseName.replace(/-/g, " ");
+  }
+
+  async function loadInsuranceDocuments(policy = documentPolicy) {
+    const userId = session?.user?.id;
+    if (!userId || !policy?.id) return [];
+
+    const folder = `${userId}/${policy.id}`;
+    const { data, error } = await supabase.storage
+      .from("insurance-documents")
+      .list(folder, { limit: 100, sortBy: { column: "created_at", order: "desc" } });
+
+    if (error) {
+      console.error("Could not load insurance documents:", error);
+      setSaveMessage("Could not load documents.");
+      return [];
+    }
+
+    const storedDocuments = (data || [])
+      .filter((item) => item.name && item.name !== ".emptyFolderPlaceholder")
+      .map((item) => ({
+        name: item.name,
+        displayName: displayInsuranceDocumentName(item.name),
+        path: `${folder}/${item.name}`,
+        mimeType: item.metadata?.mimetype || "",
+        createdAt: item.created_at || item.updated_at || "",
+      }));
+
+    setSavedInsuranceDocuments(storedDocuments);
+    setSelectedInsuranceDocument((current) => {
+      if (!current) return storedDocuments[0] || null;
+      return storedDocuments.find((item) => item.path === current.path) || storedDocuments[0] || null;
+    });
+    return storedDocuments;
+  }
+
+  async function openInsuranceDocument(policy) {
+    const userId = session?.user?.id;
+    if (!userId || !policy?.id) return;
+
+    setDocumentPolicy(policy);
+    setInsuranceDocumentFile(null);
+    setInsuranceDocumentName("");
+    setSavedInsuranceDocuments([]);
+    setSelectedInsuranceDocument(null);
+    setInsuranceDocumentPreviewUrl("");
+    setShowInsuranceDocument(true);
+    setInsuranceDocumentBusy(true);
+
+    await loadInsuranceDocuments(policy);
+    setInsuranceDocumentBusy(false);
+  }
+
+  function selectSavedInsuranceDocument(document) {
+    if (insuranceDocumentPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(insuranceDocumentPreviewUrl);
+    }
+    setInsuranceDocumentFile(null);
+    setInsuranceDocumentName("");
+    setSelectedInsuranceDocument(document);
+    setInsuranceDocumentPreviewUrl("");
+  }
+
+  function selectInsuranceDocumentFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (insuranceDocumentPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(insuranceDocumentPreviewUrl);
+    }
+
+    setInsuranceDocumentFile(file);
+    const originalName = file.name || "document";
+    const lastDot = originalName.lastIndexOf(".");
+    const baseName = lastDot > 0 ? originalName.slice(0, lastDot) : originalName;
+    setInsuranceDocumentName(baseName);
+    setSelectedInsuranceDocument(null);
+    setInsuranceDocumentPreviewUrl("");
+  }
+
+  async function previewInsuranceDocument() {
+    if (insuranceDocumentFile) {
+      if (insuranceDocumentPreviewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(insuranceDocumentPreviewUrl);
+      }
+      setInsuranceDocumentPreviewUrl(URL.createObjectURL(insuranceDocumentFile));
+      return;
+    }
+
+    if (!selectedInsuranceDocument?.path) {
+      window.alert("Choose a photo/file or select a saved document first.");
+      return;
+    }
+
+    setInsuranceDocumentBusy(true);
+    const { data, error } = await supabase.storage
+      .from("insurance-documents")
+      .createSignedUrl(selectedInsuranceDocument.path, 300);
+
+    if (error) {
+      console.error("Could not preview insurance document:", error);
+      window.alert("The document could not be previewed.");
+      setInsuranceDocumentBusy(false);
+      return;
+    }
+
+    setInsuranceDocumentPreviewUrl(data.signedUrl);
+    setInsuranceDocumentBusy(false);
+  }
+
+  async function saveInsuranceDocument() {
+    const userId = session?.user?.id;
+    if (!userId || !documentPolicy?.id) return;
+
+    if (!insuranceDocumentFile) {
+      if (selectedInsuranceDocument || savedInsuranceDocuments.length > 0) {
+        setShowInsuranceDocument(false);
+        setInsuranceDocumentPreviewUrl("");
+        setDocumentPolicy(null);
+        setSaveMessage("Document saved");
+        return;
+      }
+      window.alert("Please take a photo or choose a file first.");
+      return;
+    }
+
+    const trimmedDocumentName = insuranceDocumentName.trim();
+    if (!trimmedDocumentName) {
+      window.alert("Please enter a name for this document before saving.");
+      return;
+    }
+
+    setInsuranceDocumentBusy(true);
+    const folder = `${userId}/${documentPolicy.id}`;
+    const originalName = insuranceDocumentFile.name || "document";
+    const lastDot = originalName.lastIndexOf(".");
+    const extension = lastDot > 0 ? originalName.slice(lastDot) : "";
+    const safeDocumentName = trimmedDocumentName
+      .replace(/[^a-zA-Z0-9._ -]+/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/^-+|-+$/g, "") || "document";
+    const safeExtension = extension.replace(/[^a-zA-Z0-9.]+/g, "");
+    const filePath = `${folder}/${Date.now()}-${safeDocumentName}${safeExtension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("insurance-documents")
+      .upload(filePath, insuranceDocumentFile, {
+        cacheControl: "3600",
+        contentType: insuranceDocumentFile.type || undefined,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Could not save insurance document:", uploadError);
+      window.alert("The document could not be saved. Please try again.");
+      setInsuranceDocumentBusy(false);
+      return;
+    }
+
+    if (insuranceDocumentPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(insuranceDocumentPreviewUrl);
+    }
+
+    setInsuranceDocumentFile(null);
+    setInsuranceDocumentName("");
+    setSavedInsuranceDocuments([]);
+    setSelectedInsuranceDocument(null);
+    setInsuranceDocumentPreviewUrl("");
+    setDocumentPolicy(null);
+    setShowInsuranceDocument(false);
+    setInsuranceDocumentBusy(false);
+    setSaveMessage("Document saved");
+  }
+
+  async function deleteInsuranceDocument() {
+    if (insuranceDocumentFile) {
+      if (insuranceDocumentPreviewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(insuranceDocumentPreviewUrl);
+      }
+      setInsuranceDocumentFile(null);
+      setInsuranceDocumentName("");
+      setInsuranceDocumentPreviewUrl("");
+      return;
+    }
+
+    if (!selectedInsuranceDocument?.path) {
+      window.alert("Select a saved document to delete.");
+      return;
+    }
+
+    if (!window.confirm(`Delete ${selectedInsuranceDocument.displayName || selectedInsuranceDocument.name}?`)) return;
+
+    setInsuranceDocumentBusy(true);
+    const deletedPath = selectedInsuranceDocument.path;
+    const { error } = await supabase.storage
+      .from("insurance-documents")
+      .remove([deletedPath]);
+
+    if (error) {
+      console.error("Could not delete insurance document:", error);
+      window.alert("The document could not be deleted.");
+      setInsuranceDocumentBusy(false);
+      return;
+    }
+
+    setInsuranceDocumentPreviewUrl("");
+    const remaining = savedInsuranceDocuments.filter((item) => item.path !== deletedPath);
+    setSavedInsuranceDocuments(remaining);
+    setSelectedInsuranceDocument(remaining[0] || null);
+    setInsuranceDocumentBusy(false);
+    setSaveMessage("Document deleted");
+  }
+
+  function closeInsuranceDocument() {
+    if (insuranceDocumentPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(insuranceDocumentPreviewUrl);
+    }
+    setInsuranceDocumentFile(null);
+    setInsuranceDocumentName("");
+    setSavedInsuranceDocuments([]);
+    setSelectedInsuranceDocument(null);
+    setInsuranceDocumentPreviewUrl("");
+    setDocumentPolicy(null);
+    setShowInsuranceDocument(false);
+  }
+
   function handleDoctorChange(event) {
     const { name, value } = event.target;
     setDoctorForm((current) => ({ ...current, [name]: value }));
@@ -1220,6 +1478,277 @@ function App() {
     window.alert("No report is attached.");
   }
 
+
+  async function loadLabDocuments(lab = documentLab) {
+    const userId = session?.user?.id;
+    if (!userId || !lab?.id) return [];
+
+    const folder = `${userId}/${lab.id}`;
+    const { data, error } = await supabase.storage
+      .from("lab-documents")
+      .list(folder, { limit: 100, sortBy: { column: "created_at", order: "desc" } });
+
+    if (error) {
+      console.error("Could not load lab documents:", error);
+      setSaveMessage("Could not load documents.");
+      return [];
+    }
+
+    const storedDocuments = (data || [])
+      .filter((item) => item.name && item.name !== ".emptyFolderPlaceholder")
+      .map((item) => ({
+        name: item.name,
+        displayName: displayInsuranceDocumentName(item.name),
+        path: `${folder}/${item.name}`,
+        mimeType: item.metadata?.mimetype || "",
+        createdAt: item.created_at || item.updated_at || "",
+      }));
+
+    setSavedLabDocuments(storedDocuments);
+    setSelectedLabDocument((current) => {
+      if (!current) return storedDocuments[0] || null;
+      return storedDocuments.find((item) => item.path === current.path) || storedDocuments[0] || null;
+    });
+    return storedDocuments;
+  }
+
+  async function openLabDocument(lab) {
+    const userId = session?.user?.id;
+    if (!userId || !lab?.id) return;
+
+    setDocumentLab(lab);
+    setLabDocumentFile(null);
+    setLabDocumentName("");
+    setSavedLabDocuments([]);
+    setSelectedLabDocument(null);
+    setLabDocumentPreviewUrl("");
+    setShowLabDocument(true);
+    setLabDocumentBusy(true);
+    await loadLabDocuments(lab);
+    setLabDocumentBusy(false);
+  }
+
+  function selectSavedLabDocument(document) {
+    if (labDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(labDocumentPreviewUrl);
+    setLabDocumentFile(null);
+    setLabDocumentName("");
+    setSelectedLabDocument(document);
+    setLabDocumentPreviewUrl("");
+  }
+
+  function selectLabDocumentFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (labDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(labDocumentPreviewUrl);
+    setLabDocumentFile(file);
+    const originalName = file.name || "document";
+    const lastDot = originalName.lastIndexOf(".");
+    setLabDocumentName(lastDot > 0 ? originalName.slice(0, lastDot) : originalName);
+    setSelectedLabDocument(null);
+    setLabDocumentPreviewUrl("");
+  }
+
+  async function previewLabDocument() {
+    if (labDocumentFile) {
+      if (labDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(labDocumentPreviewUrl);
+      setLabDocumentPreviewUrl(URL.createObjectURL(labDocumentFile));
+      return;
+    }
+    if (!selectedLabDocument?.path) {
+      window.alert("Choose a photo/file or select a saved document first.");
+      return;
+    }
+    setLabDocumentBusy(true);
+    const { data, error } = await supabase.storage.from("lab-documents").createSignedUrl(selectedLabDocument.path, 300);
+    if (error) {
+      console.error("Could not preview lab document:", error);
+      window.alert("The document could not be previewed.");
+      setLabDocumentBusy(false);
+      return;
+    }
+    setLabDocumentPreviewUrl(data.signedUrl);
+    setLabDocumentBusy(false);
+  }
+
+  async function saveLabDocument() {
+    const userId = session?.user?.id;
+    if (!userId || !documentLab?.id) return;
+    if (!labDocumentFile) {
+      if (selectedLabDocument || savedLabDocuments.length > 0) {
+        closeLabDocument();
+        setSaveMessage("Document saved");
+        return;
+      }
+      window.alert("Please take a photo or choose a file first.");
+      return;
+    }
+    const trimmedDocumentName = labDocumentName.trim();
+    if (!trimmedDocumentName) {
+      window.alert("Please enter a name for this document before saving.");
+      return;
+    }
+    setLabDocumentBusy(true);
+    const folder = `${userId}/${documentLab.id}`;
+    const originalName = labDocumentFile.name || "document";
+    const lastDot = originalName.lastIndexOf(".");
+    const extension = lastDot > 0 ? originalName.slice(lastDot) : "";
+    const safeDocumentName = trimmedDocumentName.replace(/[^a-zA-Z0-9._ -]+/g, "").trim().replace(/\s+/g, "-").replace(/^-+|-+$/g, "") || "document";
+    const safeExtension = extension.replace(/[^a-zA-Z0-9.]+/g, "");
+    const filePath = `${folder}/${Date.now()}-${safeDocumentName}${safeExtension}`;
+    const { error } = await supabase.storage.from("lab-documents").upload(filePath, labDocumentFile, {
+      cacheControl: "3600", contentType: labDocumentFile.type || undefined, upsert: false,
+    });
+    if (error) {
+      console.error("Could not save lab document:", error);
+      window.alert("The document could not be saved. Please try again.");
+      setLabDocumentBusy(false);
+      return;
+    }
+    closeLabDocument();
+    setSaveMessage("Document saved");
+  }
+
+  async function deleteLabDocument() {
+    if (labDocumentFile) {
+      if (labDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(labDocumentPreviewUrl);
+      setLabDocumentFile(null); setLabDocumentName(""); setLabDocumentPreviewUrl(""); return;
+    }
+    if (!selectedLabDocument?.path) { window.alert("Select a saved document to delete."); return; }
+    if (!window.confirm(`Delete ${selectedLabDocument.displayName || selectedLabDocument.name}?`)) return;
+    setLabDocumentBusy(true);
+    const deletedPath = selectedLabDocument.path;
+    const { error } = await supabase.storage.from("lab-documents").remove([deletedPath]);
+    if (error) {
+      console.error("Could not delete lab document:", error);
+      window.alert("The document could not be deleted.");
+      setLabDocumentBusy(false); return;
+    }
+    setLabDocumentPreviewUrl("");
+    const remaining = savedLabDocuments.filter((item) => item.path !== deletedPath);
+    setSavedLabDocuments(remaining); setSelectedLabDocument(remaining[0] || null);
+    setLabDocumentBusy(false); setSaveMessage("Document deleted");
+  }
+
+  function closeLabDocument() {
+    if (labDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(labDocumentPreviewUrl);
+    setLabDocumentFile(null); setLabDocumentName(""); setSavedLabDocuments([]); setSelectedLabDocument(null);
+    setLabDocumentPreviewUrl(""); setDocumentLab(null); setShowLabDocument(false); setLabDocumentBusy(false);
+  }
+
+  async function loadNoteDocuments(note = documentNote) {
+    const userId = session?.user?.id;
+    if (!userId || !note?.id) return [];
+    const folder = `${userId}/${note.id}`;
+    const { data, error } = await supabase.storage.from("note-documents")
+      .list(folder, { limit: 100, sortBy: { column: "created_at", order: "desc" } });
+    if (error) {
+      console.error("Could not load note documents:", error);
+      setSaveMessage("Could not load documents."); return [];
+    }
+    const storedDocuments = (data || []).filter((item) => item.name && item.name !== ".emptyFolderPlaceholder").map((item) => ({
+      name: item.name, displayName: displayInsuranceDocumentName(item.name), path: `${folder}/${item.name}`,
+      mimeType: item.metadata?.mimetype || "", createdAt: item.created_at || item.updated_at || "",
+    }));
+    setSavedNoteDocuments(storedDocuments);
+    setSelectedNoteDocument((current) => {
+      if (!current) return storedDocuments[0] || null;
+      return storedDocuments.find((item) => item.path === current.path) || storedDocuments[0] || null;
+    });
+    return storedDocuments;
+  }
+
+  async function openNoteDocument(note) {
+    const userId = session?.user?.id;
+    if (!userId || !note?.id) return;
+    setDocumentNote(note); setNoteDocumentFile(null); setNoteDocumentName(""); setSavedNoteDocuments([]);
+    setSelectedNoteDocument(null); setNoteDocumentPreviewUrl(""); setShowNoteDocument(true); setNoteDocumentBusy(true);
+    await loadNoteDocuments(note); setNoteDocumentBusy(false);
+  }
+
+  function selectSavedNoteDocument(document) {
+    if (noteDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(noteDocumentPreviewUrl);
+    setNoteDocumentFile(null); setNoteDocumentName(""); setSelectedNoteDocument(document); setNoteDocumentPreviewUrl("");
+  }
+
+  function selectNoteDocumentFile(event) {
+    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
+    if (noteDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(noteDocumentPreviewUrl);
+    setNoteDocumentFile(file);
+    const originalName = file.name || "document"; const lastDot = originalName.lastIndexOf(".");
+    setNoteDocumentName(lastDot > 0 ? originalName.slice(0, lastDot) : originalName);
+    setSelectedNoteDocument(null); setNoteDocumentPreviewUrl("");
+  }
+
+  async function previewNoteDocument() {
+    if (noteDocumentFile) {
+      if (noteDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(noteDocumentPreviewUrl);
+      setNoteDocumentPreviewUrl(URL.createObjectURL(noteDocumentFile)); return;
+    }
+    if (!selectedNoteDocument?.path) { window.alert("Choose a photo/file or select a saved document first."); return; }
+    setNoteDocumentBusy(true);
+    const { data, error } = await supabase.storage.from("note-documents").createSignedUrl(selectedNoteDocument.path, 300);
+    if (error) {
+      console.error("Could not preview note document:", error); window.alert("The document could not be previewed.");
+      setNoteDocumentBusy(false); return;
+    }
+    setNoteDocumentPreviewUrl(data.signedUrl); setNoteDocumentBusy(false);
+  }
+
+  async function saveNoteDocument() {
+    const userId = session?.user?.id;
+    if (!userId || !documentNote?.id) return;
+    if (!noteDocumentFile) {
+      if (selectedNoteDocument || savedNoteDocuments.length > 0) {
+        closeNoteDocument(); setSaveMessage("Document saved"); return;
+      }
+      window.alert("Please take a photo or choose a file first."); return;
+    }
+    const trimmedDocumentName = noteDocumentName.trim();
+    if (!trimmedDocumentName) { window.alert("Please enter a name for this document before saving."); return; }
+    setNoteDocumentBusy(true);
+    const folder = `${userId}/${documentNote.id}`;
+    const originalName = noteDocumentFile.name || "document"; const lastDot = originalName.lastIndexOf(".");
+    const extension = lastDot > 0 ? originalName.slice(lastDot) : "";
+    const safeDocumentName = trimmedDocumentName.replace(/[^a-zA-Z0-9._ -]+/g, "").trim().replace(/\s+/g, "-").replace(/^-+|-+$/g, "") || "document";
+    const safeExtension = extension.replace(/[^a-zA-Z0-9.]+/g, "");
+    const filePath = `${folder}/${Date.now()}-${safeDocumentName}${safeExtension}`;
+    const { error } = await supabase.storage.from("note-documents").upload(filePath, noteDocumentFile, {
+      cacheControl: "3600", contentType: noteDocumentFile.type || undefined, upsert: false,
+    });
+    if (error) {
+      console.error("Could not save note document:", error); window.alert("The document could not be saved. Please try again.");
+      setNoteDocumentBusy(false); return;
+    }
+    closeNoteDocument(); setSaveMessage("Document saved");
+  }
+
+  async function deleteNoteDocument() {
+    if (noteDocumentFile) {
+      if (noteDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(noteDocumentPreviewUrl);
+      setNoteDocumentFile(null); setNoteDocumentName(""); setNoteDocumentPreviewUrl(""); return;
+    }
+    if (!selectedNoteDocument?.path) { window.alert("Select a saved document to delete."); return; }
+    if (!window.confirm(`Delete ${selectedNoteDocument.displayName || selectedNoteDocument.name}?`)) return;
+    setNoteDocumentBusy(true);
+    const deletedPath = selectedNoteDocument.path;
+    const { error } = await supabase.storage.from("note-documents").remove([deletedPath]);
+    if (error) {
+      console.error("Could not delete note document:", error); window.alert("The document could not be deleted.");
+      setNoteDocumentBusy(false); return;
+    }
+    setNoteDocumentPreviewUrl("");
+    const remaining = savedNoteDocuments.filter((item) => item.path !== deletedPath);
+    setSavedNoteDocuments(remaining); setSelectedNoteDocument(remaining[0] || null);
+    setNoteDocumentBusy(false); setSaveMessage("Document deleted");
+  }
+
+  function closeNoteDocument() {
+    if (noteDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(noteDocumentPreviewUrl);
+    setNoteDocumentFile(null); setNoteDocumentName(""); setSavedNoteDocuments([]); setSelectedNoteDocument(null);
+    setNoteDocumentPreviewUrl(""); setDocumentNote(null); setShowNoteDocument(false); setNoteDocumentBusy(false);
+  }
+
   function handleNoteChange(event) {
     const { name, value } = event.target;
     setNoteForm((current) => ({ ...current, [name]: value }));
@@ -1490,6 +2019,139 @@ if (!session) {
   }
 
   if (activeSection?.name === "Insurance Information") {
+    if (showInsuranceDocument) {
+      const previewType = insuranceDocumentFile?.type || selectedInsuranceDocument?.mimeType || "";
+      const previewName = insuranceDocumentFile?.name || selectedInsuranceDocument?.name || "";
+      const previewIsPdf = previewType === "application/pdf" || previewName.toLowerCase().endsWith(".pdf");
+
+      return (
+        <main className="app">
+          <button className="back-button" onClick={closeInsuranceDocument}>
+            ← Back
+          </button>
+
+          <h1>Insurance Document</h1>
+          <p className="document-policy-name">
+            {documentPolicy?.insuranceCompany || "Insurance"}
+          </p>
+
+          <div className="form-card document-card">
+            <div className="document-source-buttons">
+              <label className="document-source-button">
+                Take Photo
+                <input
+                  className="document-file-input"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={selectInsuranceDocumentFile}
+                />
+              </label>
+
+              <label className="document-source-button">
+                Choose File
+                <input
+                  className="document-file-input"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={selectInsuranceDocumentFile}
+                />
+              </label>
+            </div>
+
+            {insuranceDocumentFile && (
+              <div className="document-selected-file">
+                <span>Selected file:</span>
+                <strong>{insuranceDocumentFile.name}</strong>
+                <label className="document-name-label">
+                  Document Name
+                  <input
+                    type="text"
+                    value={insuranceDocumentName}
+                    onChange={(event) => setInsuranceDocumentName(event.target.value)}
+                    placeholder="Enter a name for this document"
+                    disabled={insuranceDocumentBusy}
+                  />
+                </label>
+              </div>
+            )}
+
+            {savedInsuranceDocuments.length > 0 && (
+              <div className="saved-documents-section">
+                <h2>Saved Documents</h2>
+                <div className="saved-documents-list">
+                  {savedInsuranceDocuments.map((document) => (
+                    <button
+                      type="button"
+                      key={document.path}
+                      className={`saved-document-item ${
+                        selectedInsuranceDocument?.path === document.path ? "selected" : ""
+                      }`}
+                      onClick={() => selectSavedInsuranceDocument(document)}
+                      disabled={insuranceDocumentBusy}
+                    >
+                      {document.displayName || document.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="document-help-text">
+                  Tap a saved document, then use Preview or Delete.
+                </p>
+              </div>
+            )}
+
+            {!insuranceDocumentBusy && savedInsuranceDocuments.length === 0 && !insuranceDocumentFile && (
+              <p className="document-help-text">No saved documents yet.</p>
+            )}
+
+            {insuranceDocumentBusy && <p>Working...</p>}
+
+            {insuranceDocumentPreviewUrl && (
+              <div className="document-preview">
+                {previewIsPdf ? (
+                  <iframe
+                    src={insuranceDocumentPreviewUrl}
+                    title="Insurance document preview"
+                  />
+                ) : (
+                  <img
+                    src={insuranceDocumentPreviewUrl}
+                    alt="Insurance document preview"
+                  />
+                )}
+              </div>
+            )}
+
+            <div className="document-action-buttons">
+              <button
+                className="edit-button"
+                onClick={previewInsuranceDocument}
+                disabled={insuranceDocumentBusy}
+              >
+                Preview
+              </button>
+
+              <button
+                className="save-button"
+                onClick={saveInsuranceDocument}
+                disabled={insuranceDocumentBusy}
+              >
+                Save
+              </button>
+
+              <button
+                className="delete-button"
+                onClick={deleteInsuranceDocument}
+                disabled={insuranceDocumentBusy}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="app">
         <button className="back-button" onClick={() => setActiveSection(null)}>
@@ -1542,6 +2204,13 @@ if (!session) {
                   onClick={() => editInsurance(index)}
                 >
                   Edit
+                </button>
+
+                <button
+                  className="document-button"
+                  onClick={() => openInsuranceDocument(policy)}
+                >
+                  Document
                 </button>
 
                 <button
@@ -1922,6 +2591,61 @@ if (!session) {
   }
 
   if (activeSection?.name === "Lab Results") {
+    if (showLabDocument) {
+      const previewType = labDocumentFile?.type || selectedLabDocument?.mimeType || "";
+      const previewName = labDocumentFile?.name || selectedLabDocument?.name || "";
+      const previewIsPdf = previewType === "application/pdf" || previewName.toLowerCase().endsWith(".pdf");
+      return (
+        <main className="app">
+          <button className="back-button" type="button" onClick={closeLabDocument}>← Back</button>
+          <h1>Lab Document</h1>
+          <p className="document-policy-name">{documentLab?.labName || "Lab Result"}</p>
+          <div className="form-card document-card">
+            <div className="document-source-buttons">
+              <label className="document-source-button">Take Photo
+                <input className="document-file-input" type="file" accept="image/*" capture="environment" onChange={selectLabDocumentFile} />
+              </label>
+              <label className="document-source-button">Choose File
+                <input className="document-file-input" type="file" accept="image/*,application/pdf" onChange={selectLabDocumentFile} />
+              </label>
+            </div>
+            {labDocumentFile && (
+              <div className="document-selected-file">
+                <span>Selected file:</span><strong>{labDocumentFile.name}</strong>
+                <label className="document-name-label">Document Name
+                  <input type="text" value={labDocumentName} onChange={(event) => setLabDocumentName(event.target.value)} placeholder="Enter a name for this document" disabled={labDocumentBusy} />
+                </label>
+              </div>
+            )}
+            {savedLabDocuments.length > 0 && (
+              <div className="saved-documents-section">
+                <h2>Saved Documents</h2>
+                <div className="saved-documents-list">
+                  {savedLabDocuments.map((document) => (
+                    <button type="button" key={document.path} className={`saved-document-item ${selectedLabDocument?.path === document.path ? "selected" : ""}`} onClick={() => selectSavedLabDocument(document)} disabled={labDocumentBusy}>
+                      {document.displayName || document.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="document-help-text">Tap a saved document, then use Preview or Delete.</p>
+              </div>
+            )}
+            {!labDocumentBusy && savedLabDocuments.length === 0 && !labDocumentFile && <p className="document-help-text">No saved documents yet.</p>}
+            {labDocumentBusy && <p>Working...</p>}
+            {labDocumentPreviewUrl && (
+              <div className="document-preview">
+                {previewIsPdf ? <iframe src={labDocumentPreviewUrl} title="Lab document preview" /> : <img src={labDocumentPreviewUrl} alt="Lab document preview" />}
+              </div>
+            )}
+            <div className="document-action-buttons">
+              <button className="edit-button" onClick={previewLabDocument} disabled={labDocumentBusy}>Preview</button>
+              <button className="save-button" onClick={saveLabDocument} disabled={labDocumentBusy}>Save</button>
+              <button className="delete-button" onClick={deleteLabDocument} disabled={labDocumentBusy}>Delete</button>
+            </div>
+          </div>
+        </main>
+      );
+    }
   return (
     <main className="app">
       <button
@@ -1970,6 +2694,14 @@ if (!session) {
               onClick={() => viewLabReport(lab)}
             >
               View Report
+            </button>
+
+            <button
+              className="document-button"
+              type="button"
+              onClick={() => openLabDocument(lab)}
+            >
+              Document
             </button>
 
             <div className="card-actions">
@@ -2276,6 +3008,61 @@ if (activeSection?.name === "Upcoming Appointments") {
       );
       }
 if (activeSection?.name === "Miscellaneous Notes") {
+  if (showNoteDocument) {
+    const previewType = noteDocumentFile?.type || selectedNoteDocument?.mimeType || "";
+    const previewName = noteDocumentFile?.name || selectedNoteDocument?.name || "";
+    const previewIsPdf = previewType === "application/pdf" || previewName.toLowerCase().endsWith(".pdf");
+    return (
+      <main className="app">
+        <button className="back-button" type="button" onClick={closeNoteDocument}>← Back</button>
+        <h1>Note Document</h1>
+        <p className="document-policy-name">{documentNote?.title || "Note"}</p>
+        <div className="form-card document-card">
+          <div className="document-source-buttons">
+            <label className="document-source-button">Take Photo
+              <input className="document-file-input" type="file" accept="image/*" capture="environment" onChange={selectNoteDocumentFile} />
+            </label>
+            <label className="document-source-button">Choose File
+              <input className="document-file-input" type="file" accept="image/*,application/pdf" onChange={selectNoteDocumentFile} />
+            </label>
+          </div>
+          {noteDocumentFile && (
+            <div className="document-selected-file">
+              <span>Selected file:</span><strong>{noteDocumentFile.name}</strong>
+              <label className="document-name-label">Document Name
+                <input type="text" value={noteDocumentName} onChange={(event) => setNoteDocumentName(event.target.value)} placeholder="Enter a name for this document" disabled={noteDocumentBusy} />
+              </label>
+            </div>
+          )}
+          {savedNoteDocuments.length > 0 && (
+            <div className="saved-documents-section">
+              <h2>Saved Documents</h2>
+              <div className="saved-documents-list">
+                {savedNoteDocuments.map((document) => (
+                  <button type="button" key={document.path} className={`saved-document-item ${selectedNoteDocument?.path === document.path ? "selected" : ""}`} onClick={() => selectSavedNoteDocument(document)} disabled={noteDocumentBusy}>
+                    {document.displayName || document.name}
+                  </button>
+                ))}
+              </div>
+              <p className="document-help-text">Tap a saved document, then use Preview or Delete.</p>
+            </div>
+          )}
+          {!noteDocumentBusy && savedNoteDocuments.length === 0 && !noteDocumentFile && <p className="document-help-text">No saved documents yet.</p>}
+          {noteDocumentBusy && <p>Working...</p>}
+          {noteDocumentPreviewUrl && (
+            <div className="document-preview">
+              {previewIsPdf ? <iframe src={noteDocumentPreviewUrl} title="Note document preview" /> : <img src={noteDocumentPreviewUrl} alt="Note document preview" />}
+            </div>
+          )}
+          <div className="document-action-buttons">
+            <button className="edit-button" onClick={previewNoteDocument} disabled={noteDocumentBusy}>Preview</button>
+            <button className="save-button" onClick={saveNoteDocument} disabled={noteDocumentBusy}>Save</button>
+            <button className="delete-button" onClick={deleteNoteDocument} disabled={noteDocumentBusy}>Delete</button>
+          </div>
+        </div>
+      </main>
+    );
+  }
   const sortedNotes = notes
     .map((note, index) => ({ note, index }))
     .sort((a, b) => {
@@ -2336,6 +3123,14 @@ if (activeSection?.name === "Miscellaneous Notes") {
           <p style={{ whiteSpace: "pre-wrap" }}>
             <strong>Note:</strong> {selectedNote.note}
           </p>
+
+          <button
+            className="document-button"
+            type="button"
+            onClick={() => openNoteDocument(selectedNote)}
+          >
+            Document
+          </button>
 
           <div className="card-actions">
             <button

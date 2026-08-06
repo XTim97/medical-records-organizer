@@ -95,3 +95,170 @@
   color: blue;
   font-weight: 700;
 }
+
+
+/* Insurance document controls */
+.document-button {
+  background: #4b5563;
+  color: white;
+}
+
+.document-policy-name {
+  text-align: center;
+  font-weight: 700;
+  margin-top: -8px;
+  margin-bottom: 18px;
+}
+
+.document-card {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.document-source-buttons,
+.document-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.document-source-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: #1f5f8b;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.document-file-input {
+  display: none;
+}
+
+.document-file-name {
+  margin: 14px 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.document-selected-file {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.document-selected-file span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+}
+
+.saved-documents-section {
+  margin: 20px 0;
+}
+
+.saved-documents-section h2 {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+}
+
+.saved-documents-list {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-document-item {
+  width: 100%;
+  padding: 13px 14px;
+  border: 2px solid #cbd5e1;
+  border-radius: 10px;
+  background: white;
+  color: #111827;
+  text-align: left;
+  font-weight: 700;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.saved-document-item.selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.document-help-text {
+  margin: 10px 0;
+  font-size: 0.95rem;
+}
+
+.document-preview {
+  margin: 16px 0;
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: white;
+}
+
+.document-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 65vh;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.document-preview iframe {
+  display: block;
+  width: 100%;
+  height: 65vh;
+  border: 0;
+}
+
+.document-action-buttons button {
+  min-width: 110px;
+}
+
+@media (max-width: 600px) {
+  .document-source-buttons,
+  .document-action-buttons {
+    flex-direction: column;
+  }
+
+  .document-source-button,
+  .document-action-buttons button {
+    width: 100%;
+  }
+}
+
+/* Insurance document custom name */
+.document-name-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  font-weight: 700;
+}
+
+.document-name-label input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Document buttons on Lab Results and Miscellaneous Notes */
+.document-button {
+  margin: 10px 0;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #1f5f8b;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
