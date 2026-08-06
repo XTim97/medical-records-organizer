@@ -78,3 +78,20 @@
     font-size: 1.15rem;
   }
 }
+
+/* Personal Information entered data color */
+.form-card input[name="fullName"],
+.form-card input[name="dateOfBirth"],
+.form-card input[name="address"],
+.form-card input[name="city"],
+.form-card input[name="state"],
+.form-card input[name="zipCode"],
+.form-card input[name="phoneNumber"],
+.form-card input[name="emailAddress"],
+.form-card input[name="emergencyContactName"],
+.form-card input[name="emergencyContactPhone"],
+.form-card input[name="bloodType"],
+.form-card textarea[name="allergies"] {
+  color: blue;
+  font-weight: 700;
+}
