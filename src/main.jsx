@@ -234,6 +234,7 @@ function App() {
   const [doctorForm, setDoctorForm] = useState(emptyDoctor);
   const [editingDoctorIndex, setEditingDoctorIndex] = useState(null);
   const [showDoctorForm, setShowDoctorForm] = useState(false);
+  const [selectedDoctorIndex, setSelectedDoctorIndex] = useState(null);
 
   const [surgeries, setSurgeries] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsSurgeries");
@@ -814,6 +815,44 @@ function App() {
     setLoginPassword("");
   }
 
+  function goHome() {
+    setActiveSection(null);
+
+    setShowInsuranceForm(false);
+    setSelectedInsuranceIndex(null);
+    setEditingInsuranceIndex(null);
+    setShowInsuranceDocument(false);
+    setDocumentPolicy(null);
+    setInsuranceDocumentMode("manage");
+
+    setShowDoctorForm(false);
+    setSelectedDoctorIndex(null);
+    setEditingDoctorIndex(null);
+    setDoctorForm(emptyDoctor);
+
+    setShowSurgeryForm(false);
+    setEditingSurgeryIndex(null);
+    setSurgeryForm(emptySurgery);
+
+    setShowLabForm(false);
+    setEditingLabId(null);
+    setShowLabDocument(false);
+    setDocumentLab(null);
+    setLabDocumentMode("manage");
+
+    setAppointmentView("menu");
+    setSelectedAppointment(null);
+    setEditingAppointmentIndex(null);
+    setAppointmentForm({ date: "", time: "", doctor: "", specialty: "", location: "", reason: "", notes: "" });
+
+    setShowNoteForm(false);
+    setSelectedNoteIndex(null);
+    setEditingNoteIndex(null);
+    setShowNoteDocument(false);
+    setDocumentNote(null);
+    setNoteDocumentMode("manage");
+  }
+
   function handlePersonalChange(event) {
     const { name, value } = event.target;
     setPersonalInfo((current) => ({ ...current, [name]: value }));
@@ -1340,6 +1379,7 @@ function App() {
   function addDoctor() {
     setDoctorForm(emptyDoctor);
     setEditingDoctorIndex(null);
+    setSelectedDoctorIndex(null);
     setShowDoctorForm(true);
   }
 
@@ -1364,6 +1404,7 @@ function App() {
 
     setDoctorForm(emptyDoctor);
     setEditingDoctorIndex(null);
+    setSelectedDoctorIndex(null);
     setShowDoctorForm(false);
     setSaveMessage("Doctor saved");
     await loadDoctors(userId);
@@ -1392,6 +1433,7 @@ function App() {
       return remainingDoctors;
     });
     setEditingDoctorIndex(null);
+    setSelectedDoctorIndex(null);
     setShowDoctorForm(false);
     setSaveMessage("Doctor deleted");
   }
@@ -2230,9 +2272,10 @@ if (!session) {
   if (activeSection?.name === "Personal Information") {
     return (
       <main className="app">
-        <button className="back-button" onClick={() => setActiveSection(null)}>
-          ← Back
-        </button>
+        <div className="navigation-buttons">
+          <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
+          <button className="home-button" onClick={goHome}>Home</button>
+        </div>
 
         <h1>Personal Information</h1>
 
@@ -2403,9 +2446,10 @@ if (!session) {
 
       return (
         <main className="app">
-          <button className="back-button" onClick={closeInsuranceDocument}>
-            ← Back
-          </button>
+          <div className="navigation-buttons">
+            <button className="back-button" onClick={closeInsuranceDocument}>← Back</button>
+            <button className="home-button" onClick={goHome}>Home</button>
+          </div>
 
           <h1>Insurance Document</h1>
           <p className="document-policy-name">
@@ -2555,7 +2599,7 @@ if (!session) {
                   </button>
 
                   <button
-                    className="back-button"
+                    className="cancel-button"
                     onClick={() => setInsuranceDocumentMode("manage")}
                     disabled={insuranceDocumentBusy}
                   >
@@ -2577,9 +2621,10 @@ if (!session) {
 
     return (
       <main className="app">
-        <button className="back-button" onClick={() => setActiveSection(null)}>
-          ← Back
-        </button>
+        <div className="navigation-buttons">
+          <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
+          <button className="home-button" onClick={goHome}>Home</button>
+        </div>
 
         <h1>Insurance Information</h1>
 
@@ -2733,138 +2778,121 @@ if (!session) {
   }
 
   if (activeSection?.name === "Doctors") {
+    const selectedDoctor = selectedDoctorIndex !== null ? doctors[selectedDoctorIndex] : null;
+
     return (
       <main className="app">
-        <button className="back-button" onClick={() => setActiveSection(null)}>
-          ← Back
-        </button>
+        <div className="navigation-buttons">
+          <button
+            className="back-button"
+            onClick={() => {
+              if (showDoctorForm) {
+                cancelDoctorEdit();
+              } else if (selectedDoctorIndex !== null) {
+                setSelectedDoctorIndex(null);
+              } else {
+                setActiveSection(null);
+              }
+            }}
+          >
+            ← Back
+          </button>
+          <button className="home-button" onClick={goHome}>Home</button>
+        </div>
 
         <h1>Doctors</h1>
 
-        {!showDoctorForm && (
-          <button className="add-button doctors-add-button" onClick={addDoctor}>
-            + Add Doctor
-          </button>
+        {!showDoctorForm && selectedDoctorIndex === null && (
+          <>
+            <button className="add-button doctors-add-button" onClick={addDoctor}>
+              + Add Doctor
+            </button>
+
+            <div className="doctor-buttons">
+              {doctors.map((doctor, index) => (
+                <button
+                  className="doctor-summary-button"
+                  key={doctor.id || index}
+                  onClick={() => setSelectedDoctorIndex(index)}
+                >
+                  <span className="doctor-summary-name">
+                    {doctor.doctorName || `Doctor ${index + 1}`}
+                  </span>
+                  <span>{doctor.specialty || "Specialty not entered"}</span>
+                  <span>{doctor.phoneNumber || "Phone number not entered"}</span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
-        {!showDoctorForm &&
-          doctors.map((doctor, index) => (
-            <div className="doctor-card" key={index}>
-              <h2>{doctor.doctorName || `Doctor ${index + 1}`}</h2>
+        {!showDoctorForm && selectedDoctor && (
+          <div className="doctor-card doctor-detail-card">
+            <h2>{selectedDoctor.doctorName || `Doctor ${selectedDoctorIndex + 1}`}</h2>
 
-              {doctor.specialty && (
-                <p><strong>Specialty:</strong> {doctor.specialty}</p>
-              )}
+            {selectedDoctor.specialty && (
+              <p><strong>Specialty:</strong> {selectedDoctor.specialty}</p>
+            )}
+            {selectedDoctor.officeAddress && (
+              <p><strong>Office Address:</strong> {selectedDoctor.officeAddress}</p>
+            )}
+            {(selectedDoctor.city || selectedDoctor.state || selectedDoctor.zipCode) && (
+              <p>
+                <strong>City/State/ZIP:</strong>{" "}
+                {[selectedDoctor.city, selectedDoctor.state, selectedDoctor.zipCode]
+                  .filter(Boolean)
+                  .join(", ")}
+              </p>
+            )}
+            {selectedDoctor.phoneNumber && (
+              <p><strong>Phone Number:</strong> {selectedDoctor.phoneNumber}</p>
+            )}
 
-              {doctor.officeAddress && (
-                <p><strong>Office Address:</strong> {doctor.officeAddress}</p>
-              )}
-
-              {(doctor.city || doctor.state || doctor.zipCode) && (
-                <p>
-                  <strong>City/State/ZIP:</strong>{" "}
-                  {[doctor.city, doctor.state, doctor.zipCode]
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
-              )}
-
-              {doctor.phoneNumber && (
-                <p><strong>Phone Number:</strong> {doctor.phoneNumber}</p>
-              )}
-
-              <div className="card-actions">
-                <button
-                  className="edit-button"
-                  onClick={() => editDoctor(index)}
-                >
-                  Edit
-                </button>
-
-                <button
-                  className="delete-button"
-                  onClick={() => deleteDoctor(index)}
-                >
-                  Delete
-                </button>
-              </div>
+            <div className="card-actions">
+              <button className="edit-button" onClick={() => editDoctor(selectedDoctorIndex)}>
+                Edit
+              </button>
+              <button className="delete-button" onClick={() => deleteDoctor(selectedDoctorIndex)}>
+                Delete
+              </button>
             </div>
-          ))}
+          </div>
+        )}
 
         {showDoctorForm && (
           <div className="form-card">
             <label>
               Doctor Name
-              <input
-                name="doctorName"
-                value={doctorForm.doctorName}
-                onChange={handleDoctorChange}
-              />
+              <input name="doctorName" value={doctorForm.doctorName} onChange={handleDoctorChange} />
             </label>
-
             <label>
               Specialty
-              <input
-                name="specialty"
-                value={doctorForm.specialty}
-                onChange={handleDoctorChange}
-              />
+              <input name="specialty" value={doctorForm.specialty} onChange={handleDoctorChange} />
             </label>
-
             <label>
               Office Address
-              <input
-                name="officeAddress"
-                value={doctorForm.officeAddress}
-                onChange={handleDoctorChange}
-              />
+              <input name="officeAddress" value={doctorForm.officeAddress} onChange={handleDoctorChange} />
             </label>
-
             <div className="form-row">
               <label>
                 City
-                <input
-                  name="city"
-                  value={doctorForm.city}
-                  onChange={handleDoctorChange}
-                />
+                <input name="city" value={doctorForm.city} onChange={handleDoctorChange} />
               </label>
-
               <label>
                 State
-                <input
-                  name="state"
-                  value={doctorForm.state}
-                  onChange={handleDoctorChange}
-                />
+                <input name="state" value={doctorForm.state} onChange={handleDoctorChange} />
               </label>
-
               <label>
                 ZIP Code
-                <input
-                  name="zipCode"
-                  value={doctorForm.zipCode}
-                  onChange={handleDoctorChange}
-                />
+                <input name="zipCode" value={doctorForm.zipCode} onChange={handleDoctorChange} />
               </label>
             </div>
-
             <label>
               Phone Number
-              <input
-                name="phoneNumber"
-                value={doctorForm.phoneNumber}
-                onChange={handleDoctorChange}
-              />
+              <input name="phoneNumber" value={doctorForm.phoneNumber} onChange={handleDoctorChange} />
             </label>
-
-            <button className="save-button" onClick={saveDoctor}>
-              Save Doctor
-            </button>
-
-            <button className="cancel-button" onClick={cancelDoctorEdit}>
-              Cancel
-            </button>
+            <button className="save-button" onClick={saveDoctor}>Save Doctor</button>
+            <button className="cancel-button" onClick={cancelDoctorEdit}>Cancel</button>
           </div>
         )}
       </main>
@@ -2874,9 +2902,10 @@ if (!session) {
   if (activeSection?.name === "Surgeries") {
     return (
       <main className="app">
-        <button className="back-button" onClick={() => setActiveSection(null)}>
-          ← Back
-        </button>
+        <div className="navigation-buttons">
+          <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
+          <button className="home-button" onClick={goHome}>Home</button>
+        </div>
 
         <h1>Surgeries</h1>
 
@@ -3054,7 +3083,10 @@ if (!session) {
 
       return (
         <main className="app">
+          <div className="navigation-buttons">
           <button className="back-button" type="button" onClick={closeLabDocument}>← Back</button>
+          <button className="home-button" type="button" onClick={goHome}>Home</button>
+        </div>
           <h1>Lab Document</h1>
           <p className="document-policy-name">{documentLab?.labName || "Lab Result"}</p>
 
@@ -3115,7 +3147,7 @@ if (!session) {
                 </label>
                 <div className="document-action-buttons">
                   <button className="save-button" onClick={saveLabDocumentEdit} disabled={labDocumentBusy}>Save</button>
-                  <button className="back-button" onClick={() => setLabDocumentMode("manage")} disabled={labDocumentBusy}>Cancel</button>
+                  <button className="cancel-button" onClick={() => setLabDocumentMode("manage")} disabled={labDocumentBusy}>Cancel</button>
                 </div>
               </div>
             )}
@@ -3131,13 +3163,10 @@ if (!session) {
 
   return (
     <main className="app">
-      <button
-        className="back-button"
-        type="button"
-        onClick={() => setActiveSection(null)}
-      >
-        ← Back
-      </button>
+      <div className="navigation-buttons">
+        <button className="back-button" type="button" onClick={() => setActiveSection(null)}>← Back</button>
+        <button className="home-button" type="button" onClick={goHome}>Home</button>
+      </div>
 
       <h1>Lab Results</h1>
 
@@ -3323,7 +3352,10 @@ if (activeSection?.name === "Appointments") {
   if (appointmentView === "menu") {
     return (
       <main className="app">
-        <button onClick={() => setActiveSection(null)}>← Back</button>
+        <div className="navigation-buttons">
+          <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
+          <button className="home-button" onClick={goHome}>Home</button>
+        </div>
         <h1>Appointments</h1>
         <div className="appointment-menu">
           <button className="appointment-menu-button appointment-new" onClick={() => {
@@ -3346,7 +3378,10 @@ if (activeSection?.name === "Appointments") {
   if (appointmentView === "new") {
     return (
       <main className="app">
-        <button onClick={() => { closeSelectedAppointment(); setAppointmentView("menu"); }}>← Back</button>
+        <div className="navigation-buttons">
+          <button className="back-button" onClick={() => { closeSelectedAppointment(); setAppointmentView("menu"); }}>← Back</button>
+          <button className="home-button" onClick={goHome}>Home</button>
+        </div>
         <h1>{editingAppointmentIndex !== null ? "Edit Appointment" : "New Appointment"}</h1>
         <div className="form-grid">
           <label>Appointment Date</label>
@@ -3374,7 +3409,10 @@ if (activeSection?.name === "Appointments") {
 
   return (
     <main className="app">
-      <button onClick={() => { closeSelectedAppointment(); setAppointmentView("menu"); }}>← Back</button>
+      <div className="navigation-buttons">
+        <button className="back-button" onClick={() => { closeSelectedAppointment(); setAppointmentView("menu"); }}>← Back</button>
+        <button className="home-button" onClick={goHome}>Home</button>
+      </div>
       <h1>{appointmentView === "upcoming" ? "Upcoming Appointments" : "Past Appointments"}</h1>
       {appointmentView === "upcoming"
         ? renderAppointmentList(upcomingAppointments, "No upcoming appointments.")
@@ -3417,7 +3455,10 @@ if (activeSection?.name === "Miscellaneous Notes") {
 
     return (
       <main className="app">
-        <button className="back-button" type="button" onClick={closeNoteDocument}>← Back</button>
+        <div className="navigation-buttons">
+          <button className="back-button" type="button" onClick={closeNoteDocument}>← Back</button>
+          <button className="home-button" type="button" onClick={goHome}>Home</button>
+        </div>
         <h1>Note Document</h1>
         <p className="document-policy-name">{documentNote?.title || "Note"}</p>
 
@@ -3478,7 +3519,7 @@ if (activeSection?.name === "Miscellaneous Notes") {
               </label>
               <div className="document-action-buttons">
                 <button className="save-button" onClick={saveNoteDocumentEdit} disabled={noteDocumentBusy}>Save</button>
-                <button className="back-button" onClick={() => setNoteDocumentMode("manage")} disabled={noteDocumentBusy}>Cancel</button>
+                <button className="cancel-button" onClick={() => setNoteDocumentMode("manage")} disabled={noteDocumentBusy}>Cancel</button>
               </div>
             </div>
           )}
@@ -3505,9 +3546,10 @@ if (activeSection?.name === "Miscellaneous Notes") {
 
   return (
     <main className="app">
-      <button className="back-button" onClick={() => setActiveSection(null)}>
-        ← Back
-      </button>
+      <div className="navigation-buttons">
+        <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
+        <button className="home-button" onClick={goHome}>Home</button>
+      </div>
 
       <h1>Miscellaneous Notes</h1>
 
@@ -3642,9 +3684,10 @@ if (activeSection) {
 return (
 
       <main className="app">
-        <button className="back-button" onClick={() => setActiveSection(null)}>
-          ← Back
-        </button>
+        <div className="navigation-buttons">
+          <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
+          <button className="home-button" onClick={goHome}>Home</button>
+        </div>
 
         <h1>{activeSection.name}</h1>
 

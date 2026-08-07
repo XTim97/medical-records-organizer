@@ -465,3 +465,123 @@
   .appointment-menu { grid-template-columns: 1fr; gap: 14px; }
   .appointment-menu-button { min-height: 90px; }
 }
+
+
+/* Doctors: compact provider buttons and full detail view */
+.doctor-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 18px;
+  width: 100%;
+  max-width: none;
+}
+
+.doctor-summary-button {
+  width: 220px;
+  max-width: 100%;
+  flex: 0 0 220px;
+  min-height: 96px;
+  padding: 16px 20px;
+  border: 2px solid #ca8a04;
+  border-radius: 14px;
+  background: #fefce8;
+  color: #713f12;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.doctor-summary-name {
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.doctor-summary-button:active { transform: translateY(1px); }
+.doctor-detail-card { margin-top: 18px; max-width: 760px; }
+
+@media (max-width: 600px) {
+  .doctor-buttons { gap: 10px; }
+  .doctor-summary-button { width: 220px; max-width: 100%; flex-basis: 220px; min-height: 90px; padding: 12px; font-size: 0.95rem; }
+  .doctor-summary-name { font-size: 1.05rem; }
+}
+
+/* Consistent Back + Home navigation */
+.navigation-buttons {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-bottom: 16px;
+}
+
+.navigation-buttons .back-button,
+.navigation-buttons .home-button {
+  min-width: 110px;
+  min-height: 48px;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.navigation-buttons .back-button {
+  background: #000;
+  color: #fff;
+}
+
+.navigation-buttons .home-button {
+  background: #4ade80;
+  color: #fff;
+}
+
+.navigation-buttons .back-button:active,
+.navigation-buttons .home-button:active {
+  transform: translateY(1px);
+}
+
+/* Back buttons are always black with white lettering. */
+.back-button {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+/* Final Back/Home alignment correction */
+.navigation-buttons {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  column-gap: 64px !important;
+  row-gap: 0 !important;
+}
+
+.navigation-buttons > .back-button,
+.navigation-buttons > .home-button {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 110px !important;
+  height: 48px !important;
+  min-width: 110px !important;
+  min-height: 48px !important;
+  margin: 0 !important;
+  padding: 0 18px !important;
+  line-height: 1 !important;
+  align-self: center !important;
+  vertical-align: middle !important;
+}
+
+.navigation-buttons > .home-button {
+  background: #4ade80 !important;
+  color: #fff !important;
+}
