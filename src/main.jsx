@@ -209,6 +209,7 @@ function App() {
   const [insuranceForm, setInsuranceForm] = useState(emptyInsurance);
   const [editingInsuranceIndex, setEditingInsuranceIndex] = useState(null);
   const [showInsuranceForm, setShowInsuranceForm] = useState(false);
+  const [selectedInsuranceIndex, setSelectedInsuranceIndex] = useState(null);
   const [showInsuranceDocument, setShowInsuranceDocument] = useState(false);
   const [documentPolicy, setDocumentPolicy] = useState(null);
   const [insuranceDocumentFile, setInsuranceDocumentFile] = useState(null);
@@ -217,6 +218,8 @@ function App() {
   const [selectedInsuranceDocument, setSelectedInsuranceDocument] = useState(null);
   const [insuranceDocumentPreviewUrl, setInsuranceDocumentPreviewUrl] = useState("");
   const [insuranceDocumentBusy, setInsuranceDocumentBusy] = useState(false);
+  const [insuranceDocumentMode, setInsuranceDocumentMode] = useState("manage");
+  const [insuranceDocumentEditName, setInsuranceDocumentEditName] = useState("");
 
   const [doctors, setDoctors] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsDoctors");
@@ -256,6 +259,8 @@ function App() {
   const [selectedLabDocument, setSelectedLabDocument] = useState(null);
   const [labDocumentPreviewUrl, setLabDocumentPreviewUrl] = useState("");
   const [labDocumentBusy, setLabDocumentBusy] = useState(false);
+  const [labDocumentMode, setLabDocumentMode] = useState("manage");
+  const [labDocumentEditName, setLabDocumentEditName] = useState("");
 
   const [notes, setNotes] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsNotes");
@@ -278,6 +283,8 @@ function App() {
   const [selectedNoteDocument, setSelectedNoteDocument] = useState(null);
   const [noteDocumentPreviewUrl, setNoteDocumentPreviewUrl] = useState("");
   const [noteDocumentBusy, setNoteDocumentBusy] = useState(false);
+  const [noteDocumentMode, setNoteDocumentMode] = useState("manage");
+  const [noteDocumentEditName, setNoteDocumentEditName] = useState("");
 
   function safeDate(value) {
     return value || null;
@@ -907,6 +914,7 @@ function App() {
   function addInsurance() {
     setInsuranceForm(emptyInsurance);
     setEditingInsuranceIndex(null);
+    setSelectedInsuranceIndex(null);
     setShowInsuranceForm(true);
   }
 
@@ -939,6 +947,7 @@ function App() {
 
     setInsuranceForm(emptyInsurance);
     setEditingInsuranceIndex(null);
+    setSelectedInsuranceIndex(null);
     setShowInsuranceForm(false);
     setSaveMessage("Insurance saved");
     await loadInsurance(userId);
@@ -1023,6 +1032,8 @@ function App() {
     setSavedInsuranceDocuments([]);
     setSelectedInsuranceDocument(null);
     setInsuranceDocumentPreviewUrl("");
+    setInsuranceDocumentMode("manage");
+    setInsuranceDocumentEditName("");
     setShowInsuranceDocument(true);
     setInsuranceDocumentBusy(true);
 
@@ -1038,6 +1049,8 @@ function App() {
     setInsuranceDocumentName("");
     setSelectedInsuranceDocument(document);
     setInsuranceDocumentPreviewUrl("");
+    setInsuranceDocumentMode("manage");
+    setInsuranceDocumentEditName(document.displayName || displayInsuranceDocumentName(document.name));
   }
 
   function selectInsuranceDocumentFile(event) {
@@ -1086,6 +1099,103 @@ function App() {
 
     setInsuranceDocumentPreviewUrl(data.signedUrl);
     setInsuranceDocumentBusy(false);
+  }
+
+  async function viewInsuranceDocument() {
+    if (!selectedInsuranceDocument?.path) {
+      window.alert("Select a saved document first.");
+      return;
+    }
+
+    setInsuranceDocumentBusy(true);
+    const { data, error } = await supabase.storage
+      .from("insurance-documents")
+      .createSignedUrl(selectedInsuranceDocument.path, 300);
+
+    if (error) {
+      console.error("Could not view insurance document:", error);
+      window.alert("The document could not be viewed.");
+      setInsuranceDocumentBusy(false);
+      return;
+    }
+
+    setInsuranceDocumentPreviewUrl(data.signedUrl);
+    setInsuranceDocumentMode("view");
+    setInsuranceDocumentBusy(false);
+  }
+
+  function closeInsuranceDocumentView() {
+    if (insuranceDocumentPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(insuranceDocumentPreviewUrl);
+    }
+    setInsuranceDocumentPreviewUrl("");
+    setInsuranceDocumentMode("manage");
+  }
+
+  function beginInsuranceDocumentEdit() {
+    if (!selectedInsuranceDocument) {
+      window.alert("Select a saved document first.");
+      return;
+    }
+    setInsuranceDocumentEditName(
+      selectedInsuranceDocument.displayName ||
+      displayInsuranceDocumentName(selectedInsuranceDocument.name)
+    );
+    setInsuranceDocumentMode("edit");
+  }
+
+  async function saveInsuranceDocumentEdit() {
+    const userId = session?.user?.id;
+    if (!userId || !selectedInsuranceDocument?.path) return;
+
+    const trimmedName = insuranceDocumentEditName.trim();
+    if (!trimmedName) {
+      window.alert("Please enter a document name.");
+      return;
+    }
+
+    const oldPath = selectedInsuranceDocument.path;
+    const oldFileName = selectedInsuranceDocument.name || oldPath.split("/").pop() || "document";
+    const lastDot = oldFileName.lastIndexOf(".");
+    const extension = lastDot > 0 ? oldFileName.slice(lastDot) : "";
+    const baseWithoutExtension = lastDot > 0 ? oldFileName.slice(0, lastDot) : oldFileName;
+    const timestampMatch = baseWithoutExtension.match(/^(\d+)-/);
+    const timestamp = timestampMatch ? timestampMatch[1] : String(Date.now());
+
+    const safeName = trimmedName
+      .replace(/[^a-zA-Z0-9._ -]+/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/^-+|-+$/g, "") || "document";
+
+    const folder = `${userId}/${documentPolicy.id}`;
+    const newFileName = `${timestamp}-${safeName}${extension}`;
+    const newPath = `${folder}/${newFileName}`;
+
+    if (newPath === oldPath) {
+      setInsuranceDocumentMode("manage");
+      return;
+    }
+
+    setInsuranceDocumentBusy(true);
+    const { error } = await supabase.storage
+      .from("insurance-documents")
+      .move(oldPath, newPath);
+
+    if (error) {
+      console.error("Could not rename insurance document:", error);
+      window.alert("The document name could not be changed.");
+      setInsuranceDocumentBusy(false);
+      return;
+    }
+
+    const documents = await loadInsuranceDocuments(documentPolicy);
+    const renamedDocument = documents.find((item) => item.path === newPath) || null;
+    setSelectedInsuranceDocument(renamedDocument);
+    setInsuranceDocumentEditName(trimmedName);
+    setInsuranceDocumentMode("manage");
+    setInsuranceDocumentBusy(false);
+    setSaveMessage("Document updated");
   }
 
   async function saveInsuranceDocument() {
@@ -1147,6 +1257,8 @@ function App() {
     setSavedInsuranceDocuments([]);
     setSelectedInsuranceDocument(null);
     setInsuranceDocumentPreviewUrl("");
+    setInsuranceDocumentMode("manage");
+    setInsuranceDocumentEditName("");
     setDocumentPolicy(null);
     setShowInsuranceDocument(false);
     setInsuranceDocumentBusy(false);
@@ -1169,7 +1281,7 @@ function App() {
       return;
     }
 
-    if (!window.confirm(`Delete ${selectedInsuranceDocument.displayName || selectedInsuranceDocument.name}?`)) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedInsuranceDocument.displayName || selectedInsuranceDocument.name}?`)) return;
 
     setInsuranceDocumentBusy(true);
     const deletedPath = selectedInsuranceDocument.path;
@@ -1522,6 +1634,8 @@ function App() {
     setSavedLabDocuments([]);
     setSelectedLabDocument(null);
     setLabDocumentPreviewUrl("");
+    setLabDocumentMode("manage");
+    setLabDocumentEditName("");
     setShowLabDocument(true);
     setLabDocumentBusy(true);
     await loadLabDocuments(lab);
@@ -1534,6 +1648,8 @@ function App() {
     setLabDocumentName("");
     setSelectedLabDocument(document);
     setLabDocumentPreviewUrl("");
+    setLabDocumentMode("manage");
+    setLabDocumentEditName(document.displayName || displayInsuranceDocumentName(document.name));
   }
 
   function selectLabDocumentFile(event) {
@@ -1569,6 +1685,98 @@ function App() {
     }
     setLabDocumentPreviewUrl(data.signedUrl);
     setLabDocumentBusy(false);
+  }
+
+  async function viewSavedLabDocument() {
+    if (!selectedLabDocument?.path) {
+      window.alert("Select a saved document first.");
+      return;
+    }
+
+    setLabDocumentBusy(true);
+    const { data, error } = await supabase.storage
+      .from("lab-documents")
+      .createSignedUrl(selectedLabDocument.path, 300);
+
+    if (error) {
+      console.error("Could not view lab document:", error);
+      window.alert("The document could not be viewed.");
+      setLabDocumentBusy(false);
+      return;
+    }
+
+    setLabDocumentPreviewUrl(data.signedUrl);
+    setLabDocumentMode("view");
+    setLabDocumentBusy(false);
+  }
+
+  function closeSavedLabDocumentView() {
+    if (labDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(labDocumentPreviewUrl);
+    setLabDocumentPreviewUrl("");
+    setLabDocumentMode("manage");
+  }
+
+  function beginLabDocumentEdit() {
+    if (!selectedLabDocument) {
+      window.alert("Select a saved document first.");
+      return;
+    }
+    setLabDocumentEditName(
+      selectedLabDocument.displayName || displayInsuranceDocumentName(selectedLabDocument.name)
+    );
+    setLabDocumentMode("edit");
+  }
+
+  async function saveLabDocumentEdit() {
+    const userId = session?.user?.id;
+    if (!userId || !documentLab?.id || !selectedLabDocument?.path) return;
+
+    const trimmedName = labDocumentEditName.trim();
+    if (!trimmedName) {
+      window.alert("Please enter a document name.");
+      return;
+    }
+
+    const oldPath = selectedLabDocument.path;
+    const oldFileName = selectedLabDocument.name || oldPath.split("/").pop() || "document";
+    const lastDot = oldFileName.lastIndexOf(".");
+    const extension = lastDot > 0 ? oldFileName.slice(lastDot) : "";
+    const baseWithoutExtension = lastDot > 0 ? oldFileName.slice(0, lastDot) : oldFileName;
+    const timestampMatch = baseWithoutExtension.match(/^(\d+)-/);
+    const timestamp = timestampMatch ? timestampMatch[1] : String(Date.now());
+    const safeName = trimmedName
+      .replace(/[^a-zA-Z0-9._ -]+/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/^-+|-+$/g, "") || "document";
+
+    const folder = `${userId}/${documentLab.id}`;
+    const newPath = `${folder}/${timestamp}-${safeName}${extension}`;
+
+    if (newPath === oldPath) {
+      setLabDocumentMode("manage");
+      return;
+    }
+
+    setLabDocumentBusy(true);
+    const { error } = await supabase.storage
+      .from("lab-documents")
+      .move(oldPath, newPath);
+
+    if (error) {
+      console.error("Could not rename lab document:", error);
+      window.alert("The document name could not be changed.");
+      setLabDocumentBusy(false);
+      return;
+    }
+
+    const documents = await loadLabDocuments(documentLab);
+    const renamed = documents.find((item) => item.path === newPath) || null;
+    setSelectedLabDocument(renamed);
+    setLabDocumentEditName(trimmedName);
+    setLabDocumentMode("manage");
+    setLabDocumentBusy(false);
+    setSaveMessage("Document updated");
   }
 
   async function saveLabDocument() {
@@ -1615,7 +1823,7 @@ function App() {
       setLabDocumentFile(null); setLabDocumentName(""); setLabDocumentPreviewUrl(""); return;
     }
     if (!selectedLabDocument?.path) { window.alert("Select a saved document to delete."); return; }
-    if (!window.confirm(`Delete ${selectedLabDocument.displayName || selectedLabDocument.name}?`)) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedLabDocument.displayName || selectedLabDocument.name}?`)) return;
     setLabDocumentBusy(true);
     const deletedPath = selectedLabDocument.path;
     const { error } = await supabase.storage.from("lab-documents").remove([deletedPath]);
@@ -1633,7 +1841,8 @@ function App() {
   function closeLabDocument() {
     if (labDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(labDocumentPreviewUrl);
     setLabDocumentFile(null); setLabDocumentName(""); setSavedLabDocuments([]); setSelectedLabDocument(null);
-    setLabDocumentPreviewUrl(""); setDocumentLab(null); setShowLabDocument(false); setLabDocumentBusy(false);
+    setLabDocumentPreviewUrl(""); setLabDocumentMode("manage"); setLabDocumentEditName("");
+    setDocumentLab(null); setShowLabDocument(false); setLabDocumentBusy(false);
   }
 
   async function loadNoteDocuments(note = documentNote) {
@@ -1662,13 +1871,19 @@ function App() {
     const userId = session?.user?.id;
     if (!userId || !note?.id) return;
     setDocumentNote(note); setNoteDocumentFile(null); setNoteDocumentName(""); setSavedNoteDocuments([]);
-    setSelectedNoteDocument(null); setNoteDocumentPreviewUrl(""); setShowNoteDocument(true); setNoteDocumentBusy(true);
+    setSelectedNoteDocument(null); setNoteDocumentPreviewUrl(""); setNoteDocumentMode("manage"); setNoteDocumentEditName("");
+    setShowNoteDocument(true); setNoteDocumentBusy(true);
     await loadNoteDocuments(note); setNoteDocumentBusy(false);
   }
 
   function selectSavedNoteDocument(document) {
     if (noteDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(noteDocumentPreviewUrl);
-    setNoteDocumentFile(null); setNoteDocumentName(""); setSelectedNoteDocument(document); setNoteDocumentPreviewUrl("");
+    setNoteDocumentFile(null);
+    setNoteDocumentName("");
+    setSelectedNoteDocument(document);
+    setNoteDocumentPreviewUrl("");
+    setNoteDocumentMode("manage");
+    setNoteDocumentEditName(document.displayName || displayInsuranceDocumentName(document.name));
   }
 
   function selectNoteDocumentFile(event) {
@@ -1693,6 +1908,98 @@ function App() {
       setNoteDocumentBusy(false); return;
     }
     setNoteDocumentPreviewUrl(data.signedUrl); setNoteDocumentBusy(false);
+  }
+
+  async function viewSavedNoteDocument() {
+    if (!selectedNoteDocument?.path) {
+      window.alert("Select a saved document first.");
+      return;
+    }
+
+    setNoteDocumentBusy(true);
+    const { data, error } = await supabase.storage
+      .from("note-documents")
+      .createSignedUrl(selectedNoteDocument.path, 300);
+
+    if (error) {
+      console.error("Could not view note document:", error);
+      window.alert("The document could not be viewed.");
+      setNoteDocumentBusy(false);
+      return;
+    }
+
+    setNoteDocumentPreviewUrl(data.signedUrl);
+    setNoteDocumentMode("view");
+    setNoteDocumentBusy(false);
+  }
+
+  function closeSavedNoteDocumentView() {
+    if (noteDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(noteDocumentPreviewUrl);
+    setNoteDocumentPreviewUrl("");
+    setNoteDocumentMode("manage");
+  }
+
+  function beginNoteDocumentEdit() {
+    if (!selectedNoteDocument) {
+      window.alert("Select a saved document first.");
+      return;
+    }
+    setNoteDocumentEditName(
+      selectedNoteDocument.displayName || displayInsuranceDocumentName(selectedNoteDocument.name)
+    );
+    setNoteDocumentMode("edit");
+  }
+
+  async function saveNoteDocumentEdit() {
+    const userId = session?.user?.id;
+    if (!userId || !documentNote?.id || !selectedNoteDocument?.path) return;
+
+    const trimmedName = noteDocumentEditName.trim();
+    if (!trimmedName) {
+      window.alert("Please enter a document name.");
+      return;
+    }
+
+    const oldPath = selectedNoteDocument.path;
+    const oldFileName = selectedNoteDocument.name || oldPath.split("/").pop() || "document";
+    const lastDot = oldFileName.lastIndexOf(".");
+    const extension = lastDot > 0 ? oldFileName.slice(lastDot) : "";
+    const baseWithoutExtension = lastDot > 0 ? oldFileName.slice(0, lastDot) : oldFileName;
+    const timestampMatch = baseWithoutExtension.match(/^(\d+)-/);
+    const timestamp = timestampMatch ? timestampMatch[1] : String(Date.now());
+    const safeName = trimmedName
+      .replace(/[^a-zA-Z0-9._ -]+/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/^-+|-+$/g, "") || "document";
+
+    const folder = `${userId}/${documentNote.id}`;
+    const newPath = `${folder}/${timestamp}-${safeName}${extension}`;
+
+    if (newPath === oldPath) {
+      setNoteDocumentMode("manage");
+      return;
+    }
+
+    setNoteDocumentBusy(true);
+    const { error } = await supabase.storage
+      .from("note-documents")
+      .move(oldPath, newPath);
+
+    if (error) {
+      console.error("Could not rename note document:", error);
+      window.alert("The document name could not be changed.");
+      setNoteDocumentBusy(false);
+      return;
+    }
+
+    const documents = await loadNoteDocuments(documentNote);
+    const renamed = documents.find((item) => item.path === newPath) || null;
+    setSelectedNoteDocument(renamed);
+    setNoteDocumentEditName(trimmedName);
+    setNoteDocumentMode("manage");
+    setNoteDocumentBusy(false);
+    setSaveMessage("Document updated");
   }
 
   async function saveNoteDocument() {
@@ -1729,7 +2036,7 @@ function App() {
       setNoteDocumentFile(null); setNoteDocumentName(""); setNoteDocumentPreviewUrl(""); return;
     }
     if (!selectedNoteDocument?.path) { window.alert("Select a saved document to delete."); return; }
-    if (!window.confirm(`Delete ${selectedNoteDocument.displayName || selectedNoteDocument.name}?`)) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedNoteDocument.displayName || selectedNoteDocument.name}?`)) return;
     setNoteDocumentBusy(true);
     const deletedPath = selectedNoteDocument.path;
     const { error } = await supabase.storage.from("note-documents").remove([deletedPath]);
@@ -1746,7 +2053,8 @@ function App() {
   function closeNoteDocument() {
     if (noteDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(noteDocumentPreviewUrl);
     setNoteDocumentFile(null); setNoteDocumentName(""); setSavedNoteDocuments([]); setSelectedNoteDocument(null);
-    setNoteDocumentPreviewUrl(""); setDocumentNote(null); setShowNoteDocument(false); setNoteDocumentBusy(false);
+    setNoteDocumentPreviewUrl(""); setNoteDocumentMode("manage"); setNoteDocumentEditName("");
+    setDocumentNote(null); setShowNoteDocument(false); setNoteDocumentBusy(false);
   }
 
   function handleNoteChange(event) {
@@ -2020,9 +2328,45 @@ if (!session) {
 
   if (activeSection?.name === "Insurance Information") {
     if (showInsuranceDocument) {
-      const previewType = insuranceDocumentFile?.type || selectedInsuranceDocument?.mimeType || "";
-      const previewName = insuranceDocumentFile?.name || selectedInsuranceDocument?.name || "";
+      const previewType = selectedInsuranceDocument?.mimeType || "";
+      const previewName = selectedInsuranceDocument?.name || "";
       const previewIsPdf = previewType === "application/pdf" || previewName.toLowerCase().endsWith(".pdf");
+
+      if (insuranceDocumentMode === "view" && insuranceDocumentPreviewUrl) {
+        return (
+          <main className="app document-fullscreen-viewer">
+            <h1>Insurance Document</h1>
+            <p className="document-policy-name">
+              {selectedInsuranceDocument?.displayName || selectedInsuranceDocument?.name || "Document"}
+            </p>
+
+            <div className="form-card document-card">
+              <div className="document-preview">
+                {previewIsPdf ? (
+                  <iframe
+                    src={insuranceDocumentPreviewUrl}
+                    title="Insurance document"
+                  />
+                ) : (
+                  <img
+                    src={insuranceDocumentPreviewUrl}
+                    alt="Insurance document"
+                  />
+                )}
+              </div>
+
+              <div className="document-action-buttons document-view-actions">
+                <button
+                  className="save-button"
+                  onClick={closeInsuranceDocumentView}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </main>
+        );
+      }
 
       return (
         <main className="app">
@@ -2036,47 +2380,77 @@ if (!session) {
           </p>
 
           <div className="form-card document-card">
-            <div className="document-source-buttons">
-              <label className="document-source-button">
-                Take Photo
-                <input
-                  className="document-file-input"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={selectInsuranceDocumentFile}
-                />
-              </label>
+            {!selectedInsuranceDocument && insuranceDocumentMode !== "edit" && (
+              <>
+                <div className="document-source-buttons">
+                  <label className="document-source-button">
+                    Take Photo
+                    <input
+                      className="document-file-input"
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={selectInsuranceDocumentFile}
+                    />
+                  </label>
 
-              <label className="document-source-button">
-                Choose File
-                <input
-                  className="document-file-input"
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={selectInsuranceDocumentFile}
-                />
-              </label>
-            </div>
+                  <label className="document-source-button">
+                    Choose File
+                    <input
+                      className="document-file-input"
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={selectInsuranceDocumentFile}
+                    />
+                  </label>
+                </div>
 
-            {insuranceDocumentFile && (
-              <div className="document-selected-file">
-                <span>Selected file:</span>
-                <strong>{insuranceDocumentFile.name}</strong>
-                <label className="document-name-label">
-                  Document Name
-                  <input
-                    type="text"
-                    value={insuranceDocumentName}
-                    onChange={(event) => setInsuranceDocumentName(event.target.value)}
-                    placeholder="Enter a name for this document"
-                    disabled={insuranceDocumentBusy}
-                  />
-                </label>
-              </div>
+                {insuranceDocumentFile && (
+                  <div className="document-selected-file">
+                    <span>Selected file:</span>
+                    <strong>{insuranceDocumentFile.name}</strong>
+                    <label className="document-name-label">
+                      Document Name
+                      <input
+                        type="text"
+                        value={insuranceDocumentName}
+                        onChange={(event) => setInsuranceDocumentName(event.target.value)}
+                        placeholder="Enter a name for this document"
+                        disabled={insuranceDocumentBusy}
+                      />
+                    </label>
+
+                    <div className="document-action-buttons">
+                      <button
+                        className="edit-button"
+                        onClick={previewInsuranceDocument}
+                        disabled={insuranceDocumentBusy}
+                      >
+                        Preview
+                      </button>
+
+                      <button
+                        className="save-button"
+                        onClick={saveInsuranceDocument}
+                        disabled={insuranceDocumentBusy}
+                      >
+                        Save
+                      </button>
+
+                      <button
+                        className="delete-button"
+                        onClick={deleteInsuranceDocument}
+                        disabled={insuranceDocumentBusy}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            {savedInsuranceDocuments.length > 0 && (
+            {savedInsuranceDocuments.length > 0 && insuranceDocumentMode !== "edit" && (
               <div className="saved-documents-section">
                 <h2>Saved Documents</h2>
                 <div className="saved-documents-list">
@@ -2094,9 +2468,67 @@ if (!session) {
                     </button>
                   ))}
                 </div>
-                <p className="document-help-text">
-                  Tap a saved document, then use Preview or Delete.
-                </p>
+              </div>
+            )}
+
+            {selectedInsuranceDocument && insuranceDocumentMode === "manage" && (
+              <div className="document-action-buttons saved-document-actions">
+                <button
+                  className="edit-button"
+                  onClick={viewInsuranceDocument}
+                  disabled={insuranceDocumentBusy}
+                >
+                  View
+                </button>
+
+                <button
+                  className="save-button"
+                  onClick={beginInsuranceDocumentEdit}
+                  disabled={insuranceDocumentBusy}
+                >
+                  Edit
+                </button>
+
+                <button
+                  className="delete-button"
+                  onClick={deleteInsuranceDocument}
+                  disabled={insuranceDocumentBusy}
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+
+            {insuranceDocumentMode === "edit" && selectedInsuranceDocument && (
+              <div className="document-edit-panel">
+                <h2>Edit Document</h2>
+                <label className="document-name-label">
+                  Document Name
+                  <input
+                    type="text"
+                    value={insuranceDocumentEditName}
+                    onChange={(event) => setInsuranceDocumentEditName(event.target.value)}
+                    disabled={insuranceDocumentBusy}
+                  />
+                </label>
+
+                <div className="document-action-buttons">
+                  <button
+                    className="save-button"
+                    onClick={saveInsuranceDocumentEdit}
+                    disabled={insuranceDocumentBusy}
+                  >
+                    Save
+                  </button>
+
+                  <button
+                    className="back-button"
+                    onClick={() => setInsuranceDocumentMode("manage")}
+                    disabled={insuranceDocumentBusy}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             )}
 
@@ -2105,48 +2537,6 @@ if (!session) {
             )}
 
             {insuranceDocumentBusy && <p>Working...</p>}
-
-            {insuranceDocumentPreviewUrl && (
-              <div className="document-preview">
-                {previewIsPdf ? (
-                  <iframe
-                    src={insuranceDocumentPreviewUrl}
-                    title="Insurance document preview"
-                  />
-                ) : (
-                  <img
-                    src={insuranceDocumentPreviewUrl}
-                    alt="Insurance document preview"
-                  />
-                )}
-              </div>
-            )}
-
-            <div className="document-action-buttons">
-              <button
-                className="edit-button"
-                onClick={previewInsuranceDocument}
-                disabled={insuranceDocumentBusy}
-              >
-                Preview
-              </button>
-
-              <button
-                className="save-button"
-                onClick={saveInsuranceDocument}
-                disabled={insuranceDocumentBusy}
-              >
-                Save
-              </button>
-
-              <button
-                className="delete-button"
-                onClick={deleteInsuranceDocument}
-                disabled={insuranceDocumentBusy}
-              >
-                Delete
-              </button>
-            </div>
           </div>
         </main>
       );
@@ -2166,62 +2556,68 @@ if (!session) {
           </button>
         )}
 
-        {!showInsuranceForm &&
-          insurancePolicies.map((policy, index) => (
-            <div className="insurance-card" key={index}>
+        {!showInsuranceForm && selectedInsuranceIndex === null && (
+          <div className="insurance-buttons">
+            {insurancePolicies.map((policy, index) => (
+              <button
+                type="button"
+                className="insurance-company-button"
+                key={policy.id || index}
+                onClick={() => setSelectedInsuranceIndex(index)}
+              >
+                {policy.insuranceCompany || `Insurance ${index + 1}`}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!showInsuranceForm && selectedInsuranceIndex !== null && insurancePolicies[selectedInsuranceIndex] && (() => {
+          const policy = insurancePolicies[selectedInsuranceIndex];
+          const index = selectedInsuranceIndex;
+
+          return (
+            <div className="insurance-card">
+              <button
+                type="button"
+                className="back-button insurance-list-back"
+                onClick={() => setSelectedInsuranceIndex(null)}
+              >
+                ← Insurance List
+              </button>
+
               <h2>{policy.insuranceCompany || `Insurance ${index + 1}`}</h2>
 
-              {policy.planName && (
-                <p><strong>Plan:</strong> {policy.planName}</p>
-              )}
-
-              {policy.memberId && (
-                <p><strong>Member ID:</strong> {policy.memberId}</p>
-              )}
-
-              {policy.groupNumber && (
-                <p><strong>Group Number:</strong> {policy.groupNumber}</p>
-              )}
-
-              {policy.policyholderName && (
-                <p><strong>Policyholder:</strong> {policy.policyholderName}</p>
-              )}
-
+              {policy.planName && <p><strong>Plan:</strong> {policy.planName}</p>}
+              {policy.memberId && <p><strong>Member ID:</strong> {policy.memberId}</p>}
+              {policy.groupNumber && <p><strong>Group Number:</strong> {policy.groupNumber}</p>}
+              {policy.policyholderName && <p><strong>Policyholder:</strong> {policy.policyholderName}</p>}
               {policy.policyholderDob && (
-                <p>
-                  <strong>Policyholder Date of Birth:</strong>{" "}
-                  {policy.policyholderDob}
-                </p>
+                <p><strong>Policyholder Date of Birth:</strong> {policy.policyholderDob}</p>
               )}
-
-              {policy.notes && (
-                <p><strong>Notes:</strong> {policy.notes}</p>
-              )}
+              {policy.notes && <p><strong>Notes:</strong> {policy.notes}</p>}
 
               <div className="card-actions">
-                <button
-                  className="edit-button"
-                  onClick={() => editInsurance(index)}
-                >
+                <button className="edit-button" onClick={() => editInsurance(index)}>
                   Edit
                 </button>
 
-                <button
-                  className="document-button"
-                  onClick={() => openInsuranceDocument(policy)}
-                >
+                <button className="document-button" onClick={() => openInsuranceDocument(policy)}>
                   Document
                 </button>
 
                 <button
                   className="delete-button"
-                  onClick={() => deleteInsurance(index)}
+                  onClick={async () => {
+                    await deleteInsurance(index);
+                    setSelectedInsuranceIndex(null);
+                  }}
                 >
                   Delete
                 </button>
               </div>
             </div>
-          ))}
+          );
+        })()}
 
         {showInsuranceForm && (
           <div className="form-card">
@@ -2592,32 +2988,72 @@ if (!session) {
 
   if (activeSection?.name === "Lab Results") {
     if (showLabDocument) {
-      const previewType = labDocumentFile?.type || selectedLabDocument?.mimeType || "";
-      const previewName = labDocumentFile?.name || selectedLabDocument?.name || "";
+      const previewType = selectedLabDocument?.mimeType || "";
+      const previewName = selectedLabDocument?.name || "";
       const previewIsPdf = previewType === "application/pdf" || previewName.toLowerCase().endsWith(".pdf");
+
+      if (labDocumentMode === "view" && labDocumentPreviewUrl) {
+        return (
+          <main className="app document-fullscreen-viewer">
+            <h1>Lab Document</h1>
+            <p className="document-policy-name">
+              {selectedLabDocument?.displayName || selectedLabDocument?.name || "Document"}
+            </p>
+
+            <div className="form-card document-card">
+              <div className="document-preview">
+                {previewIsPdf ? (
+                  <iframe src={labDocumentPreviewUrl} title="Lab document" />
+                ) : (
+                  <img src={labDocumentPreviewUrl} alt="Lab document" />
+                )}
+              </div>
+
+              <div className="document-action-buttons document-view-actions">
+                <button className="save-button" onClick={closeSavedLabDocumentView}>
+                  OK
+                </button>
+              </div>
+            </div>
+          </main>
+        );
+      }
+
       return (
         <main className="app">
           <button className="back-button" type="button" onClick={closeLabDocument}>← Back</button>
           <h1>Lab Document</h1>
           <p className="document-policy-name">{documentLab?.labName || "Lab Result"}</p>
+
           <div className="form-card document-card">
-            <div className="document-source-buttons">
-              <label className="document-source-button">Take Photo
-                <input className="document-file-input" type="file" accept="image/*" capture="environment" onChange={selectLabDocumentFile} />
-              </label>
-              <label className="document-source-button">Choose File
-                <input className="document-file-input" type="file" accept="image/*,application/pdf" onChange={selectLabDocumentFile} />
-              </label>
-            </div>
-            {labDocumentFile && (
-              <div className="document-selected-file">
-                <span>Selected file:</span><strong>{labDocumentFile.name}</strong>
-                <label className="document-name-label">Document Name
-                  <input type="text" value={labDocumentName} onChange={(event) => setLabDocumentName(event.target.value)} placeholder="Enter a name for this document" disabled={labDocumentBusy} />
-                </label>
-              </div>
+            {!selectedLabDocument && labDocumentMode !== "edit" && (
+              <>
+                <div className="document-source-buttons">
+                  <label className="document-source-button">Take Photo
+                    <input className="document-file-input" type="file" accept="image/*" capture="environment" onChange={selectLabDocumentFile} />
+                  </label>
+                  <label className="document-source-button">Choose File
+                    <input className="document-file-input" type="file" accept="image/*,application/pdf" onChange={selectLabDocumentFile} />
+                  </label>
+                </div>
+
+                {labDocumentFile && (
+                  <div className="document-selected-file">
+                    <span>Selected file:</span><strong>{labDocumentFile.name}</strong>
+                    <label className="document-name-label">Document Name
+                      <input type="text" value={labDocumentName} onChange={(event) => setLabDocumentName(event.target.value)} placeholder="Enter a name for this document" disabled={labDocumentBusy} />
+                    </label>
+                    <div className="document-action-buttons">
+                      <button className="edit-button" onClick={previewLabDocument} disabled={labDocumentBusy}>Preview</button>
+                      <button className="save-button" onClick={saveLabDocument} disabled={labDocumentBusy}>Save</button>
+                      <button className="delete-button" onClick={deleteLabDocument} disabled={labDocumentBusy}>Delete</button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
-            {savedLabDocuments.length > 0 && (
+
+            {savedLabDocuments.length > 0 && labDocumentMode !== "edit" && (
               <div className="saved-documents-section">
                 <h2>Saved Documents</h2>
                 <div className="saved-documents-list">
@@ -2627,25 +3063,39 @@ if (!session) {
                     </button>
                   ))}
                 </div>
-                <p className="document-help-text">Tap a saved document, then use Preview or Delete.</p>
               </div>
             )}
-            {!labDocumentBusy && savedLabDocuments.length === 0 && !labDocumentFile && <p className="document-help-text">No saved documents yet.</p>}
+
+            {selectedLabDocument && labDocumentMode === "manage" && (
+              <div className="document-action-buttons saved-document-actions">
+                <button className="edit-button" onClick={viewSavedLabDocument} disabled={labDocumentBusy}>View</button>
+                <button className="save-button" onClick={beginLabDocumentEdit} disabled={labDocumentBusy}>Edit</button>
+                <button className="delete-button" onClick={deleteLabDocument} disabled={labDocumentBusy}>Delete</button>
+              </div>
+            )}
+
+            {labDocumentMode === "edit" && selectedLabDocument && (
+              <div className="document-edit-panel">
+                <h2>Edit Document</h2>
+                <label className="document-name-label">Document Name
+                  <input type="text" value={labDocumentEditName} onChange={(event) => setLabDocumentEditName(event.target.value)} disabled={labDocumentBusy} />
+                </label>
+                <div className="document-action-buttons">
+                  <button className="save-button" onClick={saveLabDocumentEdit} disabled={labDocumentBusy}>Save</button>
+                  <button className="back-button" onClick={() => setLabDocumentMode("manage")} disabled={labDocumentBusy}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {!labDocumentBusy && savedLabDocuments.length === 0 && !labDocumentFile && (
+              <p className="document-help-text">No saved documents yet.</p>
+            )}
             {labDocumentBusy && <p>Working...</p>}
-            {labDocumentPreviewUrl && (
-              <div className="document-preview">
-                {previewIsPdf ? <iframe src={labDocumentPreviewUrl} title="Lab document preview" /> : <img src={labDocumentPreviewUrl} alt="Lab document preview" />}
-              </div>
-            )}
-            <div className="document-action-buttons">
-              <button className="edit-button" onClick={previewLabDocument} disabled={labDocumentBusy}>Preview</button>
-              <button className="save-button" onClick={saveLabDocument} disabled={labDocumentBusy}>Save</button>
-              <button className="delete-button" onClick={deleteLabDocument} disabled={labDocumentBusy}>Delete</button>
-            </div>
           </div>
         </main>
       );
     }
+
   return (
     <main className="app">
       <button
@@ -3009,32 +3459,72 @@ if (activeSection?.name === "Upcoming Appointments") {
       }
 if (activeSection?.name === "Miscellaneous Notes") {
   if (showNoteDocument) {
-    const previewType = noteDocumentFile?.type || selectedNoteDocument?.mimeType || "";
-    const previewName = noteDocumentFile?.name || selectedNoteDocument?.name || "";
+    const previewType = selectedNoteDocument?.mimeType || "";
+    const previewName = selectedNoteDocument?.name || "";
     const previewIsPdf = previewType === "application/pdf" || previewName.toLowerCase().endsWith(".pdf");
+
+    if (noteDocumentMode === "view" && noteDocumentPreviewUrl) {
+      return (
+        <main className="app document-fullscreen-viewer">
+          <h1>Note Document</h1>
+          <p className="document-policy-name">
+            {selectedNoteDocument?.displayName || selectedNoteDocument?.name || "Document"}
+          </p>
+
+          <div className="form-card document-card">
+            <div className="document-preview">
+              {previewIsPdf ? (
+                <iframe src={noteDocumentPreviewUrl} title="Note document" />
+              ) : (
+                <img src={noteDocumentPreviewUrl} alt="Note document" />
+              )}
+            </div>
+
+            <div className="document-action-buttons document-view-actions">
+              <button className="save-button" onClick={closeSavedNoteDocumentView}>
+                OK
+              </button>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="app">
         <button className="back-button" type="button" onClick={closeNoteDocument}>← Back</button>
         <h1>Note Document</h1>
         <p className="document-policy-name">{documentNote?.title || "Note"}</p>
+
         <div className="form-card document-card">
-          <div className="document-source-buttons">
-            <label className="document-source-button">Take Photo
-              <input className="document-file-input" type="file" accept="image/*" capture="environment" onChange={selectNoteDocumentFile} />
-            </label>
-            <label className="document-source-button">Choose File
-              <input className="document-file-input" type="file" accept="image/*,application/pdf" onChange={selectNoteDocumentFile} />
-            </label>
-          </div>
-          {noteDocumentFile && (
-            <div className="document-selected-file">
-              <span>Selected file:</span><strong>{noteDocumentFile.name}</strong>
-              <label className="document-name-label">Document Name
-                <input type="text" value={noteDocumentName} onChange={(event) => setNoteDocumentName(event.target.value)} placeholder="Enter a name for this document" disabled={noteDocumentBusy} />
-              </label>
-            </div>
+          {!selectedNoteDocument && noteDocumentMode !== "edit" && (
+            <>
+              <div className="document-source-buttons">
+                <label className="document-source-button">Take Photo
+                  <input className="document-file-input" type="file" accept="image/*" capture="environment" onChange={selectNoteDocumentFile} />
+                </label>
+                <label className="document-source-button">Choose File
+                  <input className="document-file-input" type="file" accept="image/*,application/pdf" onChange={selectNoteDocumentFile} />
+                </label>
+              </div>
+
+              {noteDocumentFile && (
+                <div className="document-selected-file">
+                  <span>Selected file:</span><strong>{noteDocumentFile.name}</strong>
+                  <label className="document-name-label">Document Name
+                    <input type="text" value={noteDocumentName} onChange={(event) => setNoteDocumentName(event.target.value)} placeholder="Enter a name for this document" disabled={noteDocumentBusy} />
+                  </label>
+                  <div className="document-action-buttons">
+                    <button className="edit-button" onClick={previewNoteDocument} disabled={noteDocumentBusy}>Preview</button>
+                    <button className="save-button" onClick={saveNoteDocument} disabled={noteDocumentBusy}>Save</button>
+                    <button className="delete-button" onClick={deleteNoteDocument} disabled={noteDocumentBusy}>Delete</button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
-          {savedNoteDocuments.length > 0 && (
+
+          {savedNoteDocuments.length > 0 && noteDocumentMode !== "edit" && (
             <div className="saved-documents-section">
               <h2>Saved Documents</h2>
               <div className="saved-documents-list">
@@ -3044,25 +3534,39 @@ if (activeSection?.name === "Miscellaneous Notes") {
                   </button>
                 ))}
               </div>
-              <p className="document-help-text">Tap a saved document, then use Preview or Delete.</p>
             </div>
           )}
-          {!noteDocumentBusy && savedNoteDocuments.length === 0 && !noteDocumentFile && <p className="document-help-text">No saved documents yet.</p>}
+
+          {selectedNoteDocument && noteDocumentMode === "manage" && (
+            <div className="document-action-buttons saved-document-actions">
+              <button className="edit-button" onClick={viewSavedNoteDocument} disabled={noteDocumentBusy}>View</button>
+              <button className="save-button" onClick={beginNoteDocumentEdit} disabled={noteDocumentBusy}>Edit</button>
+              <button className="delete-button" onClick={deleteNoteDocument} disabled={noteDocumentBusy}>Delete</button>
+            </div>
+          )}
+
+          {noteDocumentMode === "edit" && selectedNoteDocument && (
+            <div className="document-edit-panel">
+              <h2>Edit Document</h2>
+              <label className="document-name-label">Document Name
+                <input type="text" value={noteDocumentEditName} onChange={(event) => setNoteDocumentEditName(event.target.value)} disabled={noteDocumentBusy} />
+              </label>
+              <div className="document-action-buttons">
+                <button className="save-button" onClick={saveNoteDocumentEdit} disabled={noteDocumentBusy}>Save</button>
+                <button className="back-button" onClick={() => setNoteDocumentMode("manage")} disabled={noteDocumentBusy}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {!noteDocumentBusy && savedNoteDocuments.length === 0 && !noteDocumentFile && (
+            <p className="document-help-text">No saved documents yet.</p>
+          )}
           {noteDocumentBusy && <p>Working...</p>}
-          {noteDocumentPreviewUrl && (
-            <div className="document-preview">
-              {previewIsPdf ? <iframe src={noteDocumentPreviewUrl} title="Note document preview" /> : <img src={noteDocumentPreviewUrl} alt="Note document preview" />}
-            </div>
-          )}
-          <div className="document-action-buttons">
-            <button className="edit-button" onClick={previewNoteDocument} disabled={noteDocumentBusy}>Preview</button>
-            <button className="save-button" onClick={saveNoteDocument} disabled={noteDocumentBusy}>Save</button>
-            <button className="delete-button" onClick={deleteNoteDocument} disabled={noteDocumentBusy}>Delete</button>
-          </div>
         </div>
       </main>
     );
   }
+
   const sortedNotes = notes
     .map((note, index) => ({ note, index }))
     .sort((a, b) => {
