@@ -585,3 +585,22 @@
   background: #4ade80 !important;
   color: #fff !important;
 }
+
+
+/* Keep document access visible on every saved record. */
+.record-with-document {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.record-with-document > .insurance-company-button,
+.record-with-document > .doctor-summary-button {
+  width: 100%;
+}
+
+.record-document-button {
+  width: 100%;
+  margin-top: 10px;
+}

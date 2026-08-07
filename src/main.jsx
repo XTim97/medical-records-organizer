@@ -161,6 +161,319 @@ function formatDate(date) {
     year: "numeric",
   });
 }
+
+
+function GeneralRecordDocuments({ session, target, onClose, onSavedMessage }) {
+  const [file, setFile] = useState(null);
+  const [documentName, setDocumentName] = useState("");
+  const [documents, setDocuments] = useState([]);
+  const [selectedDocument, setSelectedDocument] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState("manage");
+  const [editName, setEditName] = useState("");
+
+  const bucket = "note-documents";
+  const userId = session?.user?.id;
+  const safeRecordId = String(target?.id || "record").replace(/[^a-zA-Z0-9_-]+/g, "-");
+  const safeKind = String(target?.kind || "record").replace(/[^a-zA-Z0-9_-]+/g, "-");
+  const folder = userId ? `${userId}/${safeKind}-${safeRecordId}` : "";
+
+  function displayName(storedName) {
+    if (!storedName) return "Document";
+    const withoutTimestamp = storedName.replace(/^\d+-/, "");
+    const lastDot = withoutTimestamp.lastIndexOf(".");
+    const baseName = lastDot > 0 ? withoutTimestamp.slice(0, lastDot) : withoutTimestamp;
+    return baseName.replace(/-/g, " ");
+  }
+
+  async function loadDocuments() {
+    if (!folder) return [];
+    setBusy(true);
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .list(folder, { limit: 100, sortBy: { column: "created_at", order: "desc" } });
+    if (error) {
+      console.error("Could not load record documents:", error);
+      window.alert("The documents could not be loaded.");
+      setBusy(false);
+      return [];
+    }
+    const items = (data || [])
+      .filter((item) => item.name && item.name !== ".emptyFolderPlaceholder")
+      .map((item) => ({
+        name: item.name,
+        displayName: displayName(item.name),
+        path: `${folder}/${item.name}`,
+        mimeType: item.metadata?.mimetype || "",
+      }));
+    setDocuments(items);
+    setSelectedDocument((current) => {
+      if (!current) return items[0] || null;
+      return items.find((item) => item.path === current.path) || items[0] || null;
+    });
+    setBusy(false);
+    return items;
+  }
+
+  useEffect(() => {
+    loadDocuments();
+    return () => {
+      if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    };
+  }, [folder]);
+
+  function selectFile(event) {
+    const picked = event.target.files?.[0];
+    event.target.value = "";
+    if (!picked) return;
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setFile(picked);
+    const originalName = picked.name || "document";
+    const lastDot = originalName.lastIndexOf(".");
+    setDocumentName(lastDot > 0 ? originalName.slice(0, lastDot) : originalName);
+    setSelectedDocument(null);
+    setPreviewUrl("");
+    setMode("manage");
+  }
+
+  function selectSavedDocument(document) {
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setFile(null);
+    setDocumentName("");
+    setSelectedDocument(document);
+    setPreviewUrl("");
+    setMode("manage");
+    setEditName(document.displayName || displayName(document.name));
+  }
+
+  async function previewPickedFile() {
+    if (!file) return;
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(file));
+    setMode("preview-new");
+  }
+
+  async function viewSavedDocument() {
+    if (!selectedDocument?.path) return;
+    setBusy(true);
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(selectedDocument.path, 300);
+    if (error) {
+      console.error("Could not view record document:", error);
+      window.alert("The document could not be viewed.");
+      setBusy(false);
+      return;
+    }
+    setPreviewUrl(data.signedUrl);
+    setMode("view");
+    setBusy(false);
+  }
+
+  function closeViewer() {
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl("");
+    setMode("manage");
+  }
+
+  async function saveDocument() {
+    if (!file || !folder) {
+      window.alert("Please take a photo or choose a file first.");
+      return;
+    }
+    const trimmed = documentName.trim();
+    if (!trimmed) {
+      window.alert("Please enter a name for this document before saving.");
+      return;
+    }
+    const originalName = file.name || "document";
+    const lastDot = originalName.lastIndexOf(".");
+    const extension = lastDot > 0 ? originalName.slice(lastDot).replace(/[^a-zA-Z0-9.]+/g, "") : "";
+    const safeName = trimmed.replace(/[^a-zA-Z0-9._ -]+/g, "").trim().replace(/\s+/g, "-").replace(/^-+|-+$/g, "") || "document";
+    const path = `${folder}/${Date.now()}-${safeName}${extension}`;
+    setBusy(true);
+    const { error } = await supabase.storage.from(bucket).upload(path, file, {
+      cacheControl: "3600",
+      contentType: file.type || undefined,
+      upsert: false,
+    });
+    if (error) {
+      console.error("Could not save record document:", error);
+      window.alert("The document could not be saved. Please try again.");
+      setBusy(false);
+      return;
+    }
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setFile(null);
+    setDocumentName("");
+    setPreviewUrl("");
+    setMode("manage");
+    await loadDocuments();
+    onSavedMessage?.("Document saved");
+  }
+
+  async function deleteDocument() {
+    if (file) {
+      if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+      setFile(null);
+      setDocumentName("");
+      setPreviewUrl("");
+      setMode("manage");
+      return;
+    }
+    if (!selectedDocument?.path) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedDocument.displayName || selectedDocument.name}?`)) return;
+    setBusy(true);
+    const deletedPath = selectedDocument.path;
+    const { error } = await supabase.storage.from(bucket).remove([deletedPath]);
+    if (error) {
+      console.error("Could not delete record document:", error);
+      window.alert("The document could not be deleted.");
+      setBusy(false);
+      return;
+    }
+    const remaining = documents.filter((item) => item.path !== deletedPath);
+    setDocuments(remaining);
+    setSelectedDocument(remaining[0] || null);
+    setPreviewUrl("");
+    setBusy(false);
+    onSavedMessage?.("Document deleted");
+  }
+
+  function beginEdit() {
+    if (!selectedDocument) return;
+    setEditName(selectedDocument.displayName || displayName(selectedDocument.name));
+    setMode("edit");
+  }
+
+  async function saveEdit() {
+    if (!selectedDocument?.path || !folder) return;
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      window.alert("Please enter a document name.");
+      return;
+    }
+    const oldName = selectedDocument.name || "document";
+    const lastDot = oldName.lastIndexOf(".");
+    const extension = lastDot > 0 ? oldName.slice(lastDot) : "";
+    const base = lastDot > 0 ? oldName.slice(0, lastDot) : oldName;
+    const timestamp = base.match(/^(\d+)-/)?.[1] || String(Date.now());
+    const safeName = trimmed.replace(/[^a-zA-Z0-9._ -]+/g, "").trim().replace(/\s+/g, "-").replace(/^-+|-+$/g, "") || "document";
+    const newPath = `${folder}/${timestamp}-${safeName}${extension}`;
+    if (newPath === selectedDocument.path) {
+      setMode("manage");
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.storage.from(bucket).move(selectedDocument.path, newPath);
+    if (error) {
+      console.error("Could not rename record document:", error);
+      window.alert("The document name could not be changed.");
+      setBusy(false);
+      return;
+    }
+    const items = await loadDocuments();
+    setSelectedDocument(items.find((item) => item.path === newPath) || items[0] || null);
+    setMode("manage");
+    setBusy(false);
+    onSavedMessage?.("Document updated");
+  }
+
+  const activeName = file?.name || selectedDocument?.name || "";
+  const activeType = file?.type || selectedDocument?.mimeType || "";
+  const isPdf = activeType === "application/pdf" || activeName.toLowerCase().endsWith(".pdf");
+
+  if ((mode === "view" || mode === "preview-new") && previewUrl) {
+    return (
+      <main className="app document-fullscreen-viewer">
+        <h1>{target?.heading || "Scanned Document"}</h1>
+        <p className="document-policy-name">{file ? documentName || file.name : selectedDocument?.displayName || selectedDocument?.name}</p>
+        <div className="form-card document-card">
+          <div className="document-preview">
+            {isPdf ? <iframe src={previewUrl} title="Scanned document" /> : <img src={previewUrl} alt="Scanned document" />}
+          </div>
+          <div className="document-action-buttons document-view-actions">
+            <button className="save-button" type="button" onClick={closeViewer}>OK</button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="app">
+      <div className="navigation-buttons">
+        <button className="back-button" type="button" onClick={onClose}>← Back</button>
+      </div>
+      <h1>{target?.heading || "Scanned Documents"}</h1>
+      <p className="document-policy-name">{target?.label || "Record"}</p>
+      <div className="form-card document-card">
+        {!selectedDocument && mode !== "edit" && (
+          <>
+            <div className="document-source-buttons">
+              <label className="document-source-button">Take Photo
+                <input className="document-file-input" type="file" accept="image/*" capture="environment" onChange={selectFile} />
+              </label>
+              <label className="document-source-button">Choose File
+                <input className="document-file-input" type="file" accept="image/*,application/pdf" onChange={selectFile} />
+              </label>
+            </div>
+            {file && (
+              <div className="document-selected-file">
+                <span>Selected file:</span><strong>{file.name}</strong>
+                <label className="document-name-label">Document Name
+                  <input type="text" value={documentName} onChange={(e) => setDocumentName(e.target.value)} placeholder="Enter a name for this document" disabled={busy} />
+                </label>
+                <div className="document-action-buttons">
+                  <button className="edit-button" type="button" onClick={previewPickedFile} disabled={busy}>Preview</button>
+                  <button className="save-button" type="button" onClick={saveDocument} disabled={busy}>Save</button>
+                  <button className="delete-button" type="button" onClick={deleteDocument} disabled={busy}>Delete</button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {documents.length > 0 && mode !== "edit" && (
+          <div className="saved-documents-section">
+            <h2>Saved Documents</h2>
+            <div className="saved-documents-list">
+              {documents.map((document) => (
+                <button type="button" key={document.path} className={`saved-document-item ${selectedDocument?.path === document.path ? "selected" : ""}`} onClick={() => selectSavedDocument(document)} disabled={busy}>
+                  {document.displayName || document.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {selectedDocument && mode === "manage" && (
+          <div className="document-action-buttons saved-document-actions">
+            <button className="edit-button" type="button" onClick={viewSavedDocument} disabled={busy}>View</button>
+            <button className="save-button" type="button" onClick={beginEdit} disabled={busy}>Edit</button>
+            <button className="delete-button" type="button" onClick={deleteDocument} disabled={busy}>Delete</button>
+          </div>
+        )}
+
+        {mode === "edit" && selectedDocument && (
+          <div className="document-edit-panel">
+            <h2>Edit Document</h2>
+            <label className="document-name-label">Document Name
+              <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} disabled={busy} />
+            </label>
+            <div className="document-action-buttons">
+              <button className="save-button" type="button" onClick={saveEdit} disabled={busy}>Save</button>
+              <button className="cancel-button" type="button" onClick={() => setMode("manage")} disabled={busy}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {!busy && documents.length === 0 && !file && <p className="document-help-text">No scanned documents saved yet.</p>}
+        {busy && <p className="document-help-text">Loading...</p>}
+      </div>
+    </main>
+  );
+}
+
 function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -169,6 +482,10 @@ function App() {
   const [loginError, setLoginError] = useState("");
   const [activeSection, setActiveSection] = useState(null);
   const [saveMessage, setSaveMessage] = useState("");
+  const [generalDocumentTarget, setGeneralDocumentTarget] = useState(null);
+  const [pendingDocumentFile, setPendingDocumentFile] = useState(null);
+  const [pendingDocumentName, setPendingDocumentName] = useState("");
+  const [pendingDocumentKind, setPendingDocumentKind] = useState("");
 
   const [appointments, setAppointments] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsAppointments");
@@ -294,6 +611,63 @@ function App() {
 
   function safeTime(value) {
     return value || null;
+  }
+
+  function clearPendingDocument() {
+    setPendingDocumentFile(null);
+    setPendingDocumentName("");
+    setPendingDocumentKind("");
+  }
+
+  function selectPendingDocument(event, kind) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setPendingDocumentFile(file);
+    setPendingDocumentKind(kind);
+    const originalName = file.name || "document";
+    const lastDot = originalName.lastIndexOf(".");
+    setPendingDocumentName(lastDot > 0 ? originalName.slice(0, lastDot) : originalName);
+  }
+
+  function viewPendingDocument(kind) {
+    if (!pendingDocumentFile || pendingDocumentKind !== kind) {
+      window.alert("Please add a document first.");
+      return;
+    }
+    const url = URL.createObjectURL(pendingDocumentFile);
+    window.open(url, "_blank");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  async function uploadPendingDocument(userId, kind, recordId, bucket, folder) {
+    if (!pendingDocumentFile || pendingDocumentKind !== kind || !recordId) return true;
+
+    const trimmedName = (pendingDocumentName || "document").trim() || "document";
+    const originalName = pendingDocumentFile.name || "document";
+    const lastDot = originalName.lastIndexOf(".");
+    const extension = lastDot > 0 ? originalName.slice(lastDot).replace(/[^a-zA-Z0-9.]+/g, "") : "";
+    const safeName = trimmedName
+      .replace(/[^a-zA-Z0-9._ -]+/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/^-+|-+$/g, "") || "document";
+    const path = `${folder}/${Date.now()}-${safeName}${extension}`;
+
+    const { error } = await supabase.storage.from(bucket).upload(path, pendingDocumentFile, {
+      cacheControl: "3600",
+      contentType: pendingDocumentFile.type || undefined,
+      upsert: false,
+    });
+
+    if (error) {
+      console.error("Could not save pending document:", error);
+      window.alert("The record was saved, but the document could not be uploaded.");
+      return false;
+    }
+
+    clearPendingDocument();
+    return true;
   }
 
   function personalFromRow(row) {
@@ -939,16 +1313,22 @@ function App() {
         .insert(appointmentToRow(appointmentForm, userId));
     }
 
-    const { error } = await query;
+    const { data: savedRows, error } = await query.select("id");
     if (error) {
       console.error("Could not save appointment:", error);
       setSaveMessage("Could not save appointment.");
       return;
     }
 
+    const savedId = editing?.id || savedRows?.[0]?.id;
+    if (savedId) {
+      await uploadPendingDocument(userId, "appointment", savedId, "note-documents", `${userId}/appointment-${savedId}`);
+    }
+
     setAppointmentForm({ date: "", time: "", doctor: "", specialty: "", location: "", reason: "", notes: "" });
     setEditingAppointmentIndex(null);
     setSelectedAppointment(null);
+    setAppointmentView("menu");
     setSaveMessage("Saved");
     await loadAppointments(userId);
   }
@@ -959,6 +1339,7 @@ function App() {
   }
 
   function addInsurance() {
+    clearPendingDocument();
     setInsuranceForm(emptyInsurance);
     setEditingInsuranceIndex(null);
     setSelectedInsuranceIndex(null);
@@ -985,11 +1366,16 @@ function App() {
         .insert(insuranceToRow(insuranceForm, userId));
     }
 
-    const { error } = await query;
+    const { data: savedRows, error } = await query.select("id");
     if (error) {
       console.error("Could not save insurance:", error);
       setSaveMessage("Could not save insurance.");
       return;
+    }
+
+    const savedId = editing?.id || savedRows?.[0]?.id;
+    if (savedId) {
+      await uploadPendingDocument(userId, "insurance", savedId, "insurance-documents", `${userId}/${savedId}`);
     }
 
     setInsuranceForm(emptyInsurance);
@@ -1377,6 +1763,7 @@ function App() {
   }
 
   function addDoctor() {
+    clearPendingDocument();
     setDoctorForm(emptyDoctor);
     setEditingDoctorIndex(null);
     setSelectedDoctorIndex(null);
@@ -1395,11 +1782,16 @@ function App() {
       query = supabase.from("doctors").insert(doctorToRow(doctorForm, userId));
     }
 
-    const { error } = await query;
+    const { data: savedRows, error } = await query.select("id");
     if (error) {
       console.error("Could not save doctor:", error);
       setSaveMessage("Could not save doctor.");
       return;
+    }
+
+    const savedId = editing?.id || savedRows?.[0]?.id;
+    if (savedId) {
+      await uploadPendingDocument(userId, "doctor", savedId, "note-documents", `${userId}/doctor-${savedId}`);
     }
 
     setDoctorForm(emptyDoctor);
@@ -1450,6 +1842,7 @@ function App() {
   }
 
   function addSurgery() {
+    clearPendingDocument();
     setSurgeryForm(emptySurgery);
     setEditingSurgeryIndex(null);
     setShowSurgeryForm(true);
@@ -1467,11 +1860,16 @@ function App() {
       query = supabase.from("surgeries").insert(surgeryToRow(surgeryForm, userId));
     }
 
-    const { error } = await query;
+    const { data: savedRows, error } = await query.select("id");
     if (error) {
       console.error("Could not save surgery:", error);
       setSaveMessage("Could not save surgery.");
       return;
+    }
+
+    const savedId = editing?.id || savedRows?.[0]?.id;
+    if (savedId) {
+      await uploadPendingDocument(userId, "surgery", savedId, "note-documents", `${userId}/surgery-${savedId}`);
     }
 
     setSurgeryForm(emptySurgery);
@@ -1526,6 +1924,7 @@ function App() {
   }
 
   function addLabResult() {
+    clearPendingDocument();
     setLabForm(emptyLabResult);
     setEditingLabId(null);
     setShowLabForm(true);
@@ -1579,12 +1978,17 @@ function App() {
       query = supabase.from("lab_results").insert(payload);
     }
 
-    const { error: databaseError } = await query;
+    const { data: savedRows, error: databaseError } = await query.select("id");
     if (databaseError) {
       console.error("Could not save lab result:", databaseError);
       await supabase.storage.from("lab-results").remove([storagePath]);
       window.alert("The lab result could not be saved.");
       return;
+    }
+
+    const savedId = editingLabId || savedRows?.[0]?.id;
+    if (savedId) {
+      await uploadPendingDocument(userId, "lab", savedId, "lab-documents", `${userId}/${savedId}`);
     }
 
     if (existing?.storagePath) {
@@ -2134,6 +2538,7 @@ function App() {
   }
 
   function addNote() {
+    clearPendingDocument();
     setNoteForm(emptyNote);
     setEditingNoteIndex(null);
     setSelectedNoteIndex(null);
@@ -2163,11 +2568,16 @@ function App() {
       query = supabase.from("notes").insert(noteToRow(noteToSave, userId));
     }
 
-    const { error } = await query;
+    const { data: savedRows, error } = await query.select("id");
     if (error) {
       console.error("Could not save note:", error);
       setSaveMessage("Could not save note.");
       return;
+    }
+
+    const savedId = editing?.id || savedRows?.[0]?.id;
+    if (savedId) {
+      await uploadPendingDocument(userId, "note", savedId, "note-documents", `${userId}/${savedId}`);
     }
 
     setNoteForm(emptyNote);
@@ -2215,6 +2625,18 @@ function App() {
 
   function closeSelectedNote() {
     setSelectedNoteIndex(null);
+  }
+
+
+  if (generalDocumentTarget) {
+    return (
+      <GeneralRecordDocuments
+        session={session}
+        target={generalDocumentTarget}
+        onClose={() => setGeneralDocumentTarget(null)}
+        onSavedMessage={setSaveMessage}
+      />
+    );
   }
 
 if (authLoading) {
@@ -2394,6 +2816,19 @@ if (!session) {
 
           <button className="save-button" onClick={savePersonalInfo}>
             Save
+          </button>
+
+          <button
+            className="document-button"
+            type="button"
+            onClick={() => setGeneralDocumentTarget({
+              kind: "personal",
+              id: "information",
+              heading: "Personal Information Documents",
+              label: personalInfo.fullName || "Personal Information",
+            })}
+          >
+            Add / View Document
           </button>
 
           {saveMessage && <div className="save-message">{saveMessage}</div>}
@@ -2637,14 +3072,22 @@ if (!session) {
         {!showInsuranceForm && selectedInsuranceIndex === null && (
           <div className="insurance-buttons">
             {insurancePolicies.map((policy, index) => (
-              <button
-                type="button"
-                className="insurance-company-button"
-                key={policy.id || index}
-                onClick={() => setSelectedInsuranceIndex(index)}
-              >
-                {policy.insuranceCompany || `Insurance ${index + 1}`}
-              </button>
+              <div className="record-with-document" key={policy.id || index}>
+                <button
+                  type="button"
+                  className="insurance-company-button"
+                  onClick={() => setSelectedInsuranceIndex(index)}
+                >
+                  {policy.insuranceCompany || `Insurance ${index + 1}`}
+                </button>
+                <button
+                  type="button"
+                  className="document-button record-document-button"
+                  onClick={() => openInsuranceDocument(policy)}
+                >
+                  Add / View Document
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -2680,7 +3123,7 @@ if (!session) {
                 </button>
 
                 <button className="document-button" onClick={() => openInsuranceDocument(policy)}>
-                  Document
+                  Add / View Document
                 </button>
 
                 <button
@@ -2764,6 +3207,33 @@ if (!session) {
               />
             </label>
 
+
+            <div className="document-action-buttons">
+              <label className="document-source-button">
+                Add Document
+                <input
+                  id="new-insurance-document"
+                  className="document-file-input"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(event) => selectPendingDocument(event, "insurance")}
+                />
+              </label>
+              <button
+                className="edit-button"
+                type="button"
+                onClick={() => viewPendingDocument("insurance")}
+                disabled={!pendingDocumentFile || pendingDocumentKind !== "insurance"}
+              >
+                View Document
+              </button>
+            </div>
+            {pendingDocumentFile && pendingDocumentKind === "insurance" && (
+              <div className="selected-file">
+                Selected document: {pendingDocumentFile.name || pendingDocumentName}
+              </div>
+            )}
+
             <button className="save-button" onClick={saveInsurance}>
               Save Insurance
             </button>
@@ -2810,17 +3280,30 @@ if (!session) {
 
             <div className="doctor-buttons">
               {doctors.map((doctor, index) => (
-                <button
-                  className="doctor-summary-button"
-                  key={doctor.id || index}
-                  onClick={() => setSelectedDoctorIndex(index)}
-                >
-                  <span className="doctor-summary-name">
-                    {doctor.doctorName || `Doctor ${index + 1}`}
-                  </span>
-                  <span>{doctor.specialty || "Specialty not entered"}</span>
-                  <span>{doctor.phoneNumber || "Phone number not entered"}</span>
-                </button>
+                <div className="record-with-document" key={doctor.id || index}>
+                  <button
+                    className="doctor-summary-button"
+                    onClick={() => setSelectedDoctorIndex(index)}
+                  >
+                    <span className="doctor-summary-name">
+                      {doctor.doctorName || `Doctor ${index + 1}`}
+                    </span>
+                    <span>{doctor.specialty || "Specialty not entered"}</span>
+                    <span>{doctor.phoneNumber || "Phone number not entered"}</span>
+                  </button>
+                  <button
+                    className="document-button record-document-button"
+                    type="button"
+                    onClick={() => setGeneralDocumentTarget({
+                      kind: "doctor",
+                      id: doctor.id || index,
+                      heading: "Doctor Documents",
+                      label: doctor.doctorName || `Doctor ${index + 1}`,
+                    })}
+                  >
+                    Add / View Document
+                  </button>
+                </div>
               ))}
             </div>
           </>
@@ -2847,6 +3330,19 @@ if (!session) {
             {selectedDoctor.phoneNumber && (
               <p><strong>Phone Number:</strong> {selectedDoctor.phoneNumber}</p>
             )}
+
+            <button
+              className="document-button"
+              type="button"
+              onClick={() => setGeneralDocumentTarget({
+                kind: "doctor",
+                id: selectedDoctor.id || selectedDoctorIndex,
+                heading: "Doctor Documents",
+                label: selectedDoctor.doctorName || `Doctor ${selectedDoctorIndex + 1}`,
+              })}
+            >
+              Add / View Document
+            </button>
 
             <div className="card-actions">
               <button className="edit-button" onClick={() => editDoctor(selectedDoctorIndex)}>
@@ -2891,6 +3387,33 @@ if (!session) {
               Phone Number
               <input name="phoneNumber" value={doctorForm.phoneNumber} onChange={handleDoctorChange} />
             </label>
+
+            <div className="document-action-buttons">
+              <label className="document-source-button">
+                Add Document
+                <input
+                  id="new-doctor-document"
+                  className="document-file-input"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(event) => selectPendingDocument(event, "doctor")}
+                />
+              </label>
+              <button
+                className="edit-button"
+                type="button"
+                onClick={() => viewPendingDocument("doctor")}
+                disabled={!pendingDocumentFile || pendingDocumentKind !== "doctor"}
+              >
+                View Document
+              </button>
+            </div>
+            {pendingDocumentFile && pendingDocumentKind === "doctor" && (
+              <div className="selected-file">
+                Selected document: {pendingDocumentFile.name || pendingDocumentName}
+              </div>
+            )}
+
             <button className="save-button" onClick={saveDoctor}>Save Doctor</button>
             <button className="cancel-button" onClick={cancelDoctorEdit}>Cancel</button>
           </div>
@@ -2947,6 +3470,19 @@ if (!session) {
               {surgery.notes && (
                 <p><strong>Notes:</strong> {surgery.notes}</p>
               )}
+
+              <button
+                className="document-button"
+                type="button"
+                onClick={() => setGeneralDocumentTarget({
+                  kind: "surgery",
+                  id: surgery.id || index,
+                  heading: "Surgery Documents",
+                  label: surgery.procedureName || `Surgery ${index + 1}`,
+                })}
+              >
+                Add / View Document
+              </button>
 
               <div className="card-actions">
                 <button
@@ -3034,6 +3570,33 @@ if (!session) {
                 rows="4"
               />
             </label>
+
+
+            <div className="document-action-buttons">
+              <label className="document-source-button">
+                Add Document
+                <input
+                  id="new-surgery-document"
+                  className="document-file-input"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(event) => selectPendingDocument(event, "surgery")}
+                />
+              </label>
+              <button
+                className="edit-button"
+                type="button"
+                onClick={() => viewPendingDocument("surgery")}
+                disabled={!pendingDocumentFile || pendingDocumentKind !== "surgery"}
+              >
+                View Document
+              </button>
+            </div>
+            {pendingDocumentFile && pendingDocumentKind === "surgery" && (
+              <div className="selected-file">
+                Selected document: {pendingDocumentFile.name || pendingDocumentName}
+              </div>
+            )}
 
             <button className="save-button" onClick={saveSurgery}>
               Save Surgery
@@ -3213,7 +3776,7 @@ if (!session) {
               type="button"
               onClick={() => openLabDocument(lab)}
             >
-              Document
+              Add / View Document
             </button>
 
             <div className="card-actions">
@@ -3273,6 +3836,33 @@ if (!session) {
             </div>
           )}
 
+
+          <div className="document-action-buttons">
+            <label className="document-source-button">
+              Add Document
+              <input
+                id="new-lab-document"
+                className="document-file-input"
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(event) => selectPendingDocument(event, "lab")}
+              />
+            </label>
+            <button
+              className="edit-button"
+              type="button"
+              onClick={() => viewPendingDocument("lab")}
+              disabled={!pendingDocumentFile || pendingDocumentKind !== "lab"}
+            >
+              View Document
+            </button>
+          </div>
+          {pendingDocumentFile && pendingDocumentKind === "lab" && (
+            <div className="selected-file">
+              Selected document: {pendingDocumentFile.name || pendingDocumentName}
+            </div>
+          )}
+
           <button
             className="save-button"
             type="button"
@@ -3319,11 +3909,23 @@ if (activeSection?.name === "Appointments") {
       {selectedAppointment.location && <p><strong>Location:</strong> {selectedAppointment.location}</p>}
       {selectedAppointment.reason && <p><strong>Reason for Visit:</strong> {selectedAppointment.reason}</p>}
       {selectedAppointment.notes && <p><strong>Notes:</strong> {selectedAppointment.notes}</p>}
+      <button
+        className="document-button"
+        type="button"
+        onClick={() => setGeneralDocumentTarget({
+          kind: "appointment",
+          id: selectedAppointment.id || `${selectedAppointment.date}-${selectedAppointment.time}`,
+          heading: "Appointment Documents",
+          label: `${formatDate(selectedAppointment.date)}${selectedAppointment.doctor ? ` - ${selectedAppointment.doctor}` : ""}`,
+        })}
+      >
+        Add / View Document
+      </button>
       <button onClick={() => {
         setAppointmentForm(selectedAppointment);
         setEditingAppointmentIndex(appointments.findIndex((appointment) => appointment.id === selectedAppointment.id));
         setSelectedAppointment(null);
-        setAppointmentView("new");
+        clearPendingDocument(); setAppointmentView("new");
       }}>Edit</button>
       <button onClick={() => deleteAppointment(selectedAppointment)}>Delete</button>
       <button onClick={closeSelectedAppointment}>Close</button>
@@ -3344,6 +3946,21 @@ if (activeSection?.name === "Appointments") {
           <p><strong>{formatDate(appointment.date)}</strong> &nbsp; {formatTime(appointment.time)}</p>
           <p>{appointment.doctor}</p>
           <p>{appointment.specialty}</p>
+          <button
+            className="document-button record-document-button"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setGeneralDocumentTarget({
+                kind: "appointment",
+                id: appointment.id || `${appointment.date}-${appointment.time}`,
+                heading: "Appointment Documents",
+                label: `${formatDate(appointment.date)}${appointment.doctor ? ` - ${appointment.doctor}` : ""}`,
+              });
+            }}
+          >
+            Add / View Document
+          </button>
         </div>
       ))}
     </div>
@@ -3399,6 +4016,32 @@ if (activeSection?.name === "Appointments") {
           <label>Notes</label>
           <textarea rows="4" value={appointmentForm.notes} onChange={(e) => setAppointmentForm({ ...appointmentForm, notes: e.target.value })} />
         </div>
+
+        <div className="document-action-buttons">
+          <label className="document-source-button">
+            Add Document
+            <input
+              id="new-appointment-document"
+              className="document-file-input"
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(event) => selectPendingDocument(event, "appointment")}
+            />
+          </label>
+          <button
+            className="edit-button"
+            type="button"
+            onClick={() => viewPendingDocument("appointment")}
+            disabled={!pendingDocumentFile || pendingDocumentKind !== "appointment"}
+          >
+            View Document
+          </button>
+        </div>
+        {pendingDocumentFile && pendingDocumentKind === "appointment" && (
+          <div className="selected-file">
+            Selected document: {pendingDocumentFile.name || pendingDocumentName}
+          </div>
+        )}
         <button onClick={saveAppointment}>
           {editingAppointmentIndex !== null ? "Update Appointment" : "Add Appointment"}
         </button>
@@ -3577,6 +4220,16 @@ if (activeSection?.name === "Miscellaneous Info") {
                 <strong>{formatDate(note.date)}</strong>
               </p>
               <h2>{note.title}</h2>
+              <button
+                className="document-button record-document-button"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openNoteDocument(note);
+                }}
+              >
+                Add / View Document
+              </button>
             </div>
           ))}
         </div>
@@ -3665,6 +4318,32 @@ if (activeSection?.name === "Miscellaneous Info") {
             />
           </label>
 
+
+          <div className="document-action-buttons">
+            <label className="document-source-button">
+              Add Document
+              <input
+                id="new-note-document"
+                className="document-file-input"
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(event) => selectPendingDocument(event, "note")}
+              />
+            </label>
+            <button
+              className="edit-button"
+              type="button"
+              onClick={() => viewPendingDocument("note")}
+              disabled={!pendingDocumentFile || pendingDocumentKind !== "note"}
+            >
+              View Document
+            </button>
+          </div>
+          {pendingDocumentFile && pendingDocumentKind === "note" && (
+            <div className="selected-file">
+              Selected document: {pendingDocumentFile.name || pendingDocumentName}
+            </div>
+          )}
           <button className="save-button" type="button" onClick={saveNote}>
             {editingNoteIndex !== null ? "Update Note" : "Save Note"}
           </button>
