@@ -209,8 +209,8 @@ function GeneralRecordDocuments({ session, target, onClose, onSavedMessage }) {
       }));
     setDocuments(items);
     setSelectedDocument((current) => {
-      if (!current) return items[0] || null;
-      return items.find((item) => item.path === current.path) || items[0] || null;
+      if (!current) return null;
+      return items.find((item) => item.path === current.path) || null;
     });
     setBusy(false);
     return items;
@@ -309,6 +309,14 @@ function GeneralRecordDocuments({ session, target, onClose, onSavedMessage }) {
     setMode("manage");
     await loadDocuments();
     onSavedMessage?.("Document saved");
+
+    const addAnother = window.confirm("Document saved successfully. Do you want to add another document?");
+    if (addAnother) {
+      setSelectedDocument(null);
+      return;
+    }
+
+    onClose?.();
   }
 
   async function deleteDocument() {
@@ -667,7 +675,7 @@ function App() {
     }
 
     clearPendingDocument();
-    return true;
+    return window.confirm("Document saved successfully. Do you want to add another document?");
   }
 
   function personalFromRow(row) {
@@ -1321,9 +1329,14 @@ function App() {
     }
 
     const savedId = editing?.id || savedRows?.[0]?.id;
+    let addAnotherDocument = false;
     if (savedId) {
-      await uploadPendingDocument(userId, "appointment", savedId, "note-documents", `${userId}/appointment-${savedId}`);
+      addAnotherDocument = await uploadPendingDocument(
+        userId, "appointment", savedId, "note-documents", `${userId}/appointment-${savedId}`
+      );
     }
+
+    const savedAppointment = { ...appointmentForm, id: savedId };
 
     setAppointmentForm({ date: "", time: "", doctor: "", specialty: "", location: "", reason: "", notes: "" });
     setEditingAppointmentIndex(null);
@@ -1331,6 +1344,15 @@ function App() {
     setAppointmentView("menu");
     setSaveMessage("Saved");
     await loadAppointments(userId);
+
+    if (addAnotherDocument && savedId) {
+      setGeneralDocumentTarget({
+        kind: "appointment",
+        id: savedId,
+        heading: "Appointment Documents",
+        label: `${formatDate(savedAppointment.date)}${savedAppointment.doctor ? ` - ${savedAppointment.doctor}` : ""}`,
+      });
+    }
   }
 
   function handleInsuranceChange(event) {
@@ -1374,9 +1396,14 @@ function App() {
     }
 
     const savedId = editing?.id || savedRows?.[0]?.id;
+    let addAnotherDocument = false;
     if (savedId) {
-      await uploadPendingDocument(userId, "insurance", savedId, "insurance-documents", `${userId}/${savedId}`);
+      addAnotherDocument = await uploadPendingDocument(
+        userId, "insurance", savedId, "insurance-documents", `${userId}/${savedId}`
+      );
     }
+
+    const savedPolicy = { ...insuranceForm, id: savedId };
 
     setInsuranceForm(emptyInsurance);
     setEditingInsuranceIndex(null);
@@ -1384,6 +1411,11 @@ function App() {
     setShowInsuranceForm(false);
     setSaveMessage("Insurance saved");
     await loadInsurance(userId);
+
+    if (addAnotherDocument && savedId) {
+      await openInsuranceDocument(savedPolicy);
+      setSelectedInsuranceDocument(null);
+    }
   }
 
   function editInsurance(index) {
@@ -1694,15 +1726,20 @@ function App() {
 
     setInsuranceDocumentFile(null);
     setInsuranceDocumentName("");
-    setSavedInsuranceDocuments([]);
-    setSelectedInsuranceDocument(null);
     setInsuranceDocumentPreviewUrl("");
     setInsuranceDocumentMode("manage");
     setInsuranceDocumentEditName("");
-    setDocumentPolicy(null);
-    setShowInsuranceDocument(false);
     setInsuranceDocumentBusy(false);
     setSaveMessage("Document saved");
+
+    const addAnother = window.confirm("Document saved successfully. Do you want to add another document?");
+    if (addAnother) {
+      await loadInsuranceDocuments(documentPolicy);
+      setSelectedInsuranceDocument(null);
+      return;
+    }
+
+    closeInsuranceDocument();
   }
 
   async function deleteInsuranceDocument() {
@@ -1790,9 +1827,14 @@ function App() {
     }
 
     const savedId = editing?.id || savedRows?.[0]?.id;
+    let addAnotherDocument = false;
     if (savedId) {
-      await uploadPendingDocument(userId, "doctor", savedId, "note-documents", `${userId}/doctor-${savedId}`);
+      addAnotherDocument = await uploadPendingDocument(
+        userId, "doctor", savedId, "note-documents", `${userId}/doctor-${savedId}`
+      );
     }
+
+    const savedDoctor = { ...doctorForm, id: savedId };
 
     setDoctorForm(emptyDoctor);
     setEditingDoctorIndex(null);
@@ -1800,6 +1842,15 @@ function App() {
     setShowDoctorForm(false);
     setSaveMessage("Doctor saved");
     await loadDoctors(userId);
+
+    if (addAnotherDocument && savedId) {
+      setGeneralDocumentTarget({
+        kind: "doctor",
+        id: savedId,
+        heading: "Doctor Documents",
+        label: savedDoctor.doctorName || "Doctor",
+      });
+    }
   }
 
   function editDoctor(index) {
@@ -1868,15 +1919,29 @@ function App() {
     }
 
     const savedId = editing?.id || savedRows?.[0]?.id;
+    let addAnotherDocument = false;
     if (savedId) {
-      await uploadPendingDocument(userId, "surgery", savedId, "note-documents", `${userId}/surgery-${savedId}`);
+      addAnotherDocument = await uploadPendingDocument(
+        userId, "surgery", savedId, "note-documents", `${userId}/surgery-${savedId}`
+      );
     }
+
+    const savedSurgery = { ...surgeryForm, id: savedId };
 
     setSurgeryForm(emptySurgery);
     setEditingSurgeryIndex(null);
     setShowSurgeryForm(false);
     setSaveMessage("Surgery saved");
     await loadSurgeries(userId);
+
+    if (addAnotherDocument && savedId) {
+      setGeneralDocumentTarget({
+        kind: "surgery",
+        id: savedId,
+        heading: "Surgery Documents",
+        label: savedSurgery.procedureName || "Surgery",
+      });
+    }
   }
 
   function editSurgery(index) {
@@ -1987,9 +2052,14 @@ function App() {
     }
 
     const savedId = editingLabId || savedRows?.[0]?.id;
+    let addAnotherDocument = false;
     if (savedId) {
-      await uploadPendingDocument(userId, "lab", savedId, "lab-documents", `${userId}/${savedId}`);
+      addAnotherDocument = await uploadPendingDocument(
+        userId, "lab", savedId, "lab-documents", `${userId}/${savedId}`
+      );
     }
+
+    const savedLab = { ...labForm, id: savedId };
 
     if (existing?.storagePath) {
       await supabase.storage.from("lab-results").remove([existing.storagePath]);
@@ -2000,6 +2070,11 @@ function App() {
     setShowLabForm(false);
     setSaveMessage("Lab result saved");
     await loadLabResults(userId);
+
+    if (addAnotherDocument && savedId) {
+      await openLabDocument(savedLab);
+      setSelectedLabDocument(null);
+    }
   }
 
   function editLabResult(lab) {
@@ -2288,8 +2363,22 @@ function App() {
       setLabDocumentBusy(false);
       return;
     }
-    closeLabDocument();
+    setLabDocumentFile(null);
+    setLabDocumentName("");
+    setLabDocumentPreviewUrl("");
+    setLabDocumentMode("manage");
+    setLabDocumentEditName("");
+    setLabDocumentBusy(false);
     setSaveMessage("Document saved");
+
+    const addAnother = window.confirm("Document saved successfully. Do you want to add another document?");
+    if (addAnother) {
+      await loadLabDocuments(documentLab);
+      setSelectedLabDocument(null);
+      return;
+    }
+
+    closeLabDocument();
   }
 
   async function deleteLabDocument() {
@@ -2502,7 +2591,22 @@ function App() {
       console.error("Could not save note document:", error); window.alert("The document could not be saved. Please try again.");
       setNoteDocumentBusy(false); return;
     }
-    closeNoteDocument(); setSaveMessage("Document saved");
+    setNoteDocumentFile(null);
+    setNoteDocumentName("");
+    setNoteDocumentPreviewUrl("");
+    setNoteDocumentMode("manage");
+    setNoteDocumentEditName("");
+    setNoteDocumentBusy(false);
+    setSaveMessage("Document saved");
+
+    const addAnother = window.confirm("Document saved successfully. Do you want to add another document?");
+    if (addAnother) {
+      await loadNoteDocuments(documentNote);
+      setSelectedNoteDocument(null);
+      return;
+    }
+
+    closeNoteDocument();
   }
 
   async function deleteNoteDocument() {
@@ -2576,9 +2680,14 @@ function App() {
     }
 
     const savedId = editing?.id || savedRows?.[0]?.id;
+    let addAnotherDocument = false;
     if (savedId) {
-      await uploadPendingDocument(userId, "note", savedId, "note-documents", `${userId}/${savedId}`);
+      addAnotherDocument = await uploadPendingDocument(
+        userId, "note", savedId, "note-documents", `${userId}/${savedId}`
+      );
     }
+
+    const savedNote = { ...noteToSave, id: savedId };
 
     setNoteForm(emptyNote);
     setEditingNoteIndex(null);
@@ -2586,6 +2695,11 @@ function App() {
     setSelectedNoteIndex(null);
     setSaveMessage("Note saved");
     await loadNotes(userId);
+
+    if (addAnotherDocument && savedId) {
+      await openNoteDocument(savedNote);
+      setSelectedNoteDocument(null);
+    }
   }
 
   function editNote(index) {
@@ -2633,7 +2747,27 @@ function App() {
       <GeneralRecordDocuments
         session={session}
         target={generalDocumentTarget}
-        onClose={() => setGeneralDocumentTarget(null)}
+        onClose={() => {
+          const kind = generalDocumentTarget?.kind;
+          setGeneralDocumentTarget(null);
+
+          if (kind === "doctor") {
+            setSelectedDoctorIndex(null);
+            setEditingDoctorIndex(null);
+            setShowDoctorForm(false);
+          }
+
+          if (kind === "appointment") {
+            setSelectedAppointment(null);
+            setEditingAppointmentIndex(null);
+            setAppointmentView("menu");
+          }
+
+          if (kind === "surgery") {
+            setEditingSurgeryIndex(null);
+            setShowSurgeryForm(false);
+          }
+        }}
         onSavedMessage={setSaveMessage}
       />
     );
