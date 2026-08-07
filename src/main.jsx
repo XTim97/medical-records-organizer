@@ -10,7 +10,7 @@ const sections = [
   { name: "Surgeries", className: "green" },
   { name: "Lab Results", className: "blue" },
   { name: "Appointments", className: "indigo" },
-  { name: "Miscellaneous Notes", className: "violet" },
+  { name: "Miscellaneous Info", className: "violet" },
 ];
 
 const emptyPersonalInfo = {
@@ -3420,7 +3420,7 @@ if (activeSection?.name === "Appointments") {
     </main>
   );
 }
-if (activeSection?.name === "Miscellaneous Notes") {
+if (activeSection?.name === "Miscellaneous Info") {
   if (showNoteDocument) {
     const previewType = selectedNoteDocument?.mimeType || "";
     const previewName = selectedNoteDocument?.name || "";
@@ -3551,7 +3551,7 @@ if (activeSection?.name === "Miscellaneous Notes") {
         <button className="home-button" onClick={goHome}>Home</button>
       </div>
 
-      <h1>Miscellaneous Notes</h1>
+      <h1>Miscellaneous Info</h1>
 
       {!showNoteForm && !selectedNote && (
         <button className="add-button" type="button" onClick={addNote}>
