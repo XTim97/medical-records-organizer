@@ -9,7 +9,7 @@ const sections = [
   { name: "Doctors", className: "yellow" },
   { name: "Surgeries", className: "green" },
   { name: "Lab Results", className: "blue" },
-  { name: "Upcoming Appointments", className: "indigo" },
+  { name: "Appointments", className: "indigo" },
   { name: "Miscellaneous Notes", className: "violet" },
 ];
 
@@ -186,6 +186,7 @@ function App() {
   });
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [editingAppointmentIndex, setEditingAppointmentIndex] = useState(null);
+  const [appointmentView, setAppointmentView] = useState("menu");
 
   const [personalInfo, setPersonalInfo] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsPersonalInfo");
@@ -867,9 +868,16 @@ function App() {
       return;
     }
 
+    setAppointments((currentAppointments) => {
+      const remainingAppointments = currentAppointments.filter(
+        (appointment) => appointment.id !== appointmentToDelete.id
+      );
+      cacheAppointments(remainingAppointments);
+      return remainingAppointments;
+    });
+
     closeSelectedAppointment();
     setSaveMessage("Appointment deleted");
-    await loadAppointments(session.user.id);
   }
 
   async function saveAppointment() {
@@ -970,8 +978,15 @@ function App() {
       return;
     }
 
+    setInsurancePolicies((currentPolicies) => {
+      const remainingPolicies = currentPolicies.filter((item) => item.id !== policy.id);
+      cacheInsurance(remainingPolicies);
+      return remainingPolicies;
+    });
+    setSelectedInsuranceIndex(null);
+    setEditingInsuranceIndex(null);
+    setShowInsuranceForm(false);
     setSaveMessage("Insurance deleted");
-    await loadInsurance(session.user.id);
   }
 
   function cancelInsuranceEdit() {
@@ -1371,8 +1386,14 @@ function App() {
       return;
     }
 
+    setDoctors((currentDoctors) => {
+      const remainingDoctors = currentDoctors.filter((item) => item.id !== doctor.id);
+      cacheDoctors(remainingDoctors);
+      return remainingDoctors;
+    });
+    setEditingDoctorIndex(null);
+    setShowDoctorForm(false);
     setSaveMessage("Doctor deleted");
-    await loadDoctors(session.user.id);
   }
 
   function cancelDoctorEdit() {
@@ -1435,8 +1456,14 @@ function App() {
       return;
     }
 
+    setSurgeries((currentSurgeries) => {
+      const remainingSurgeries = currentSurgeries.filter((item) => item.id !== surgery.id);
+      cacheSurgeries(remainingSurgeries);
+      return remainingSurgeries;
+    });
+    setEditingSurgeryIndex(null);
+    setShowSurgeryForm(false);
     setSaveMessage("Surgery deleted");
-    await loadSurgeries(session.user.id);
   }
 
   function cancelSurgeryEdit() {
@@ -1554,8 +1581,10 @@ function App() {
       await supabase.storage.from("lab-results").remove([lab.storagePath]);
     }
 
+    setLabResults((currentResults) => currentResults.filter((item) => item.id !== id));
+    setEditingLabId(null);
+    setShowLabForm(false);
     setSaveMessage("Lab result deleted");
-    await loadLabResults(session.user.id);
   }
 
   function cancelLabEdit() {
@@ -2125,11 +2154,15 @@ function App() {
       return;
     }
 
+    setNotes((currentNotes) => {
+      const remainingNotes = currentNotes.filter((item) => item.id !== note.id);
+      cacheNotes(remainingNotes);
+      return remainingNotes;
+    });
     setSelectedNoteIndex(null);
     setEditingNoteIndex(null);
     setShowNoteForm(false);
     setSaveMessage("Note deleted");
-    await loadNotes(session.user.id);
   }
 
   function cancelNoteEdit() {
@@ -3238,225 +3271,117 @@ if (!session) {
   );
 }
   
-if (activeSection?.name === "Upcoming Appointments") {
-  return (
-    
-      <main className="app">
-      <button onClick={() => setActiveSection(null)}>← Back</button>
-      <h1>Upcoming Appointments</h1>
-      <div className="form-grid">
-      <label>Appointment Date</label>
-      <input
-  type="date"
-  value={appointmentForm.date}
-  onChange={(e) =>
-    setAppointmentForm({
-      ...appointmentForm,
-      date: e.target.value,
-    })
-  }
-/>
-      <label>Appointment Time</label>
-      <input
-  type="time"
-  value={appointmentForm.time}
-  onChange={(e) =>
-    setAppointmentForm({
-      ...appointmentForm,
-      time: e.target.value,
-    })
-  }
-/>
-      <label>Doctor / Provider</label>
-      <input
-  type="text"
-  value={appointmentForm.doctor}
-  onChange={(e) =>
-    setAppointmentForm({
-      ...appointmentForm,
-      doctor: e.target.value,
-    })
-  }
-/>
-      <label>Specialty</label>
-      <input
-  type="text"
-  value={appointmentForm.specialty}
-  onChange={(e) =>
-    setAppointmentForm({
-      ...appointmentForm,
-      specialty: e.target.value,
-    })
-  }
-/>
-      <label>Location</label>
-      <input
-  type="text"
-  value={appointmentForm.location}
-  onChange={(e) =>
-    setAppointmentForm({
-      ...appointmentForm,
-      location: e.target.value,
-    })
-  }
-/>
-      <label>Reason for Visit</label>
-      <input
-  type="text"
-  value={appointmentForm.reason}
-  onChange={(e) =>
-    setAppointmentForm({
-      ...appointmentForm,
-      reason: e.target.value,
-    })
-  }
-/>
-      <label>Notes</label>
-      <textarea
-  rows="4"
-  value={appointmentForm.notes}
-  onChange={(e) =>
-    setAppointmentForm({
-      ...appointmentForm,
-      notes: e.target.value,
-    })
-  }
-/>
-      </div>
-      <div className="appointments-columns">
-      {appointments.length > 0 && (        
-  <div className="appointment-list">
-    <h2>Upcoming Appointments</h2>
-{selectedAppointment && (
-  <div className="selected-appointment">
-    <h3>Appointment Details</h3>
+if (activeSection?.name === "Appointments") {
+  const todayString = new Date().toLocaleDateString("en-CA");
+  const upcomingAppointments = appointments
+    .filter((appointment) => appointment.date && appointment.date >= todayString)
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.time || "").localeCompare(b.time || ""));
+  const pastAppointments = appointments
+    .filter((appointment) => appointment.date && appointment.date < todayString)
+    .sort((a, b) => b.date.localeCompare(a.date) || (b.time || "").localeCompare(a.time || ""));
 
-   <p><strong>Date:</strong> {formatDate(selectedAppointment.date)}</p>
-    <p><strong>Time:</strong> {formatTime(selectedAppointment.time)}</p>
-
-    {selectedAppointment.doctor && (
-      <p><strong>Doctor / Provider:</strong> {selectedAppointment.doctor}</p>
-    )}
-
-    {selectedAppointment.specialty && (
-      <p><strong>Specialty:</strong> {selectedAppointment.specialty}</p>
-    )}
-
-    {selectedAppointment.location && (
-      <p><strong>Location:</strong> {selectedAppointment.location}</p>
-    )}
-
-    {selectedAppointment.reason && (
-      <p><strong>Reason for Visit:</strong> {selectedAppointment.reason}</p>
-    )}
-
-    {selectedAppointment.notes && (
-      <p><strong>Notes:</strong> {selectedAppointment.notes}</p>
-    )}
-<button
-  onClick={() => {
-  setAppointmentForm(selectedAppointment);
-  setEditingAppointmentIndex(
-    appointments.findIndex((appointment) => appointment === selectedAppointment)
-  );
-}}
->
-  Edit
-</button>
-<button onClick={() => deleteAppointment(selectedAppointment)}>
-  Delete
-</button>
-<button onClick={closeSelectedAppointment}>Close</button>
-</div>
-)}
-{appointments
-  .filter((appointment) => {
-  if (!appointment.date) return false;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const appointmentDate = new Date(`${appointment.date}T00:00:00`);
-
-  return appointmentDate >= today;
-})
- .sort((a, b) => {
-  const dateComparison = a.date.localeCompare(b.date);
-
-  if (dateComparison !== 0) {
-    return dateComparison;
-  }
-
-  return (a.time || "").localeCompare(b.time || "");
-})
-  .map((appointment, index) => (
-    <div
-      key={index}
-      className="appointment-card clickable"
-      onClick={() => setSelectedAppointment(appointment)}
-    >
-       <p><strong>{formatDate(appointment.date)}</strong> &nbsp; {formatTime(appointment.time)}</p>
-<p>{appointment.doctor}</p>
-<p>{appointment.specialty}</p>
-      </div>
-    ))}
-  </div>
-)}
-     {appointments.some((appointment) => {
-  if (!appointment.date) return false;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const appointmentDate = new Date(`${appointment.date}T00:00:00`);
-
-  return appointmentDate < today;
-}) && (
-  <div className="appointment-list">
-    <h2>Past Appointments</h2>
-    {appointments
-  .filter((appointment) => {
-    if (!appointment.date) return false;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const appointmentDate = new Date(`${appointment.date}T00:00:00`);
-
-    return appointmentDate < today;
-  })
-  .sort((a, b) => {
-    const dateComparison = b.date.localeCompare(a.date);
-
-    if (dateComparison !== 0) {
-      return dateComparison;
-    }
-
-    return (b.time || "").localeCompare(a.time || "");
-  })
-  .map((appointment, index) => (
-    <div
-      key={index}
-      className="appointment-card clickable"
-      onClick={() => setSelectedAppointment(appointment)}
-    >
-      <p>
-        <strong>{formatDate(appointment.date)}</strong>
-        &nbsp; {formatTime(appointment.time)}
-      </p>
-      <p>{appointment.doctor}</p>
-      <p>{appointment.specialty}</p>
+  const appointmentDetails = selectedAppointment && (
+    <div className="selected-appointment">
+      <h3>Appointment Details</h3>
+      <p><strong>Date:</strong> {formatDate(selectedAppointment.date)}</p>
+      <p><strong>Time:</strong> {formatTime(selectedAppointment.time)}</p>
+      {selectedAppointment.doctor && <p><strong>Doctor / Provider:</strong> {selectedAppointment.doctor}</p>}
+      {selectedAppointment.specialty && <p><strong>Specialty:</strong> {selectedAppointment.specialty}</p>}
+      {selectedAppointment.location && <p><strong>Location:</strong> {selectedAppointment.location}</p>}
+      {selectedAppointment.reason && <p><strong>Reason for Visit:</strong> {selectedAppointment.reason}</p>}
+      {selectedAppointment.notes && <p><strong>Notes:</strong> {selectedAppointment.notes}</p>}
+      <button onClick={() => {
+        setAppointmentForm(selectedAppointment);
+        setEditingAppointmentIndex(appointments.findIndex((appointment) => appointment.id === selectedAppointment.id));
+        setSelectedAppointment(null);
+        setAppointmentView("new");
+      }}>Edit</button>
+      <button onClick={() => deleteAppointment(selectedAppointment)}>Delete</button>
+      <button onClick={closeSelectedAppointment}>Close</button>
     </div>
-  ))}
-  </div>
-)}
-</div>
-  <button onClick={saveAppointment}>
-  {editingAppointmentIndex !== null ? "Update Appointment" : "Add Appointment"}
-</button>
+  );
+
+  const renderAppointmentList = (items, emptyMessage) => (
+    <div className="appointment-list">
+      {appointmentDetails}
+      {items.length === 0 ? (
+        <p className="empty">{emptyMessage}</p>
+      ) : items.map((appointment) => (
+        <div
+          key={appointment.id || `${appointment.date}-${appointment.time}-${appointment.doctor}`}
+          className="appointment-card clickable"
+          onClick={() => setSelectedAppointment(appointment)}
+        >
+          <p><strong>{formatDate(appointment.date)}</strong> &nbsp; {formatTime(appointment.time)}</p>
+          <p>{appointment.doctor}</p>
+          <p>{appointment.specialty}</p>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (appointmentView === "menu") {
+    return (
+      <main className="app">
+        <button onClick={() => setActiveSection(null)}>← Back</button>
+        <h1>Appointments</h1>
+        <div className="appointment-menu">
+          <button className="appointment-menu-button appointment-new" onClick={() => {
+            closeSelectedAppointment();
+            setAppointmentView("new");
+          }}>New Appointment</button>
+          <button className="appointment-menu-button appointment-upcoming" onClick={() => {
+            closeSelectedAppointment();
+            setAppointmentView("upcoming");
+          }}>Upcoming Appointments</button>
+          <button className="appointment-menu-button appointment-past" onClick={() => {
+            closeSelectedAppointment();
+            setAppointmentView("past");
+          }}>Past Appointments</button>
+        </div>
       </main>
-      );
-      }
+    );
+  }
+
+  if (appointmentView === "new") {
+    return (
+      <main className="app">
+        <button onClick={() => { closeSelectedAppointment(); setAppointmentView("menu"); }}>← Back</button>
+        <h1>{editingAppointmentIndex !== null ? "Edit Appointment" : "New Appointment"}</h1>
+        <div className="form-grid">
+          <label>Appointment Date</label>
+          <input type="date" value={appointmentForm.date} onChange={(e) => setAppointmentForm({ ...appointmentForm, date: e.target.value })} />
+          <label>Appointment Time</label>
+          <input type="time" value={appointmentForm.time} onChange={(e) => setAppointmentForm({ ...appointmentForm, time: e.target.value })} />
+          <label>Doctor / Provider</label>
+          <input type="text" value={appointmentForm.doctor} onChange={(e) => setAppointmentForm({ ...appointmentForm, doctor: e.target.value })} />
+          <label>Specialty</label>
+          <input type="text" value={appointmentForm.specialty} onChange={(e) => setAppointmentForm({ ...appointmentForm, specialty: e.target.value })} />
+          <label>Location</label>
+          <input type="text" value={appointmentForm.location} onChange={(e) => setAppointmentForm({ ...appointmentForm, location: e.target.value })} />
+          <label>Reason for Visit</label>
+          <input type="text" value={appointmentForm.reason} onChange={(e) => setAppointmentForm({ ...appointmentForm, reason: e.target.value })} />
+          <label>Notes</label>
+          <textarea rows="4" value={appointmentForm.notes} onChange={(e) => setAppointmentForm({ ...appointmentForm, notes: e.target.value })} />
+        </div>
+        <button onClick={saveAppointment}>
+          {editingAppointmentIndex !== null ? "Update Appointment" : "Add Appointment"}
+        </button>
+        {saveMessage && <div className="save-message">{saveMessage}</div>}
+      </main>
+    );
+  }
+
+  return (
+    <main className="app">
+      <button onClick={() => { closeSelectedAppointment(); setAppointmentView("menu"); }}>← Back</button>
+      <h1>{appointmentView === "upcoming" ? "Upcoming Appointments" : "Past Appointments"}</h1>
+      {appointmentView === "upcoming"
+        ? renderAppointmentList(upcomingAppointments, "No upcoming appointments.")
+        : renderAppointmentList(pastAppointments, "No past appointments.")}
+    </main>
+  );
+}
 if (activeSection?.name === "Miscellaneous Notes") {
   if (showNoteDocument) {
     const previewType = selectedNoteDocument?.mimeType || "";
