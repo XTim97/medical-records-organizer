@@ -61,7 +61,6 @@ const emptySurgery = {
 const emptyLabResult = {
   testDate: "",
   labName: "",
-  reportFile: null,
 };
 
 const emptyNote = {
@@ -172,6 +171,7 @@ function GeneralRecordDocuments({ session, target, onClose, onSavedMessage }) {
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState("manage");
   const [editName, setEditName] = useState("");
+  const [addingNewDocument, setAddingNewDocument] = useState(false);
 
   const bucket = "note-documents";
   const userId = session?.user?.id;
@@ -235,6 +235,7 @@ function GeneralRecordDocuments({ session, target, onClose, onSavedMessage }) {
     setSelectedDocument(null);
     setPreviewUrl("");
     setMode("manage");
+    setAddingNewDocument(true);
   }
 
   function selectSavedDocument(document) {
@@ -245,6 +246,18 @@ function GeneralRecordDocuments({ session, target, onClose, onSavedMessage }) {
     setPreviewUrl("");
     setMode("manage");
     setEditName(document.displayName || displayName(document.name));
+    setAddingNewDocument(false);
+  }
+
+  function beginNewDocument() {
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setFile(null);
+    setDocumentName("");
+    setSelectedDocument(null);
+    setPreviewUrl("");
+    setMode("manage");
+    setEditName("");
+    setAddingNewDocument(true);
   }
 
   async function previewPickedFile() {
@@ -313,6 +326,7 @@ function GeneralRecordDocuments({ session, target, onClose, onSavedMessage }) {
     const addAnother = window.confirm("Document saved successfully. Do you want to add another document?");
     if (addAnother) {
       setSelectedDocument(null);
+      setAddingNewDocument(true);
       return;
     }
 
@@ -412,10 +426,10 @@ function GeneralRecordDocuments({ session, target, onClose, onSavedMessage }) {
       <div className="navigation-buttons">
         <button className="back-button" type="button" onClick={onClose}>← Back</button>
       </div>
-      <h1>{target?.heading || "Scanned Documents"}</h1>
+      <h1>Insurance Document</h1>
       <p className="document-policy-name">{target?.label || "Record"}</p>
       <div className="form-card document-card">
-        {!selectedDocument && mode !== "edit" && (
+        {!selectedDocument && mode !== "edit" && (documents.length === 0 || addingNewDocument) && (
           <>
             <div className="document-source-buttons">
               <label className="document-source-button">Take Photo
@@ -443,6 +457,7 @@ function GeneralRecordDocuments({ session, target, onClose, onSavedMessage }) {
 
         {documents.length > 0 && mode !== "edit" && (
           <div className="saved-documents-section">
+            {!addingNewDocument && <button className="document-source-button" type="button" onClick={beginNewDocument} disabled={busy}>+ Add Another Document</button>}
             <h2>Saved Documents</h2>
             <div className="saved-documents-list">
               {documents.map((document) => (
@@ -546,6 +561,7 @@ function App() {
   const [insuranceDocumentBusy, setInsuranceDocumentBusy] = useState(false);
   const [insuranceDocumentMode, setInsuranceDocumentMode] = useState("manage");
   const [insuranceDocumentEditName, setInsuranceDocumentEditName] = useState("");
+  const [addingNewInsuranceDocument, setAddingNewInsuranceDocument] = useState(false);
 
   const [doctors, setDoctors] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsDoctors");
@@ -590,6 +606,7 @@ function App() {
   const [labDocumentBusy, setLabDocumentBusy] = useState(false);
   const [labDocumentMode, setLabDocumentMode] = useState("manage");
   const [labDocumentEditName, setLabDocumentEditName] = useState("");
+  const [addingNewLabDocument, setAddingNewLabDocument] = useState(false);
 
   const [notes, setNotes] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsNotes");
@@ -614,6 +631,7 @@ function App() {
   const [noteDocumentBusy, setNoteDocumentBusy] = useState(false);
   const [noteDocumentMode, setNoteDocumentMode] = useState("manage");
   const [noteDocumentEditName, setNoteDocumentEditName] = useState("");
+  const [addingNewNoteDocument, setAddingNewNoteDocument] = useState(false);
 
   function safeDate(value) {
     return value || null;
@@ -843,10 +861,6 @@ function App() {
       id: row.id,
       testDate: row.test_date || "",
       labName: row.lab_name || "",
-      fileName: row.file_name || "Lab Report",
-      fileType: row.file_type || "",
-      storagePath: row.storage_path || "",
-      reportFile: null,
     };
   }
 
@@ -1492,8 +1506,8 @@ function App() {
 
     setSavedInsuranceDocuments(storedDocuments);
     setSelectedInsuranceDocument((current) => {
-      if (!current) return storedDocuments[0] || null;
-      return storedDocuments.find((item) => item.path === current.path) || storedDocuments[0] || null;
+      if (!current) return null;
+      return storedDocuments.find((item) => item.path === current.path) || null;
     });
     return storedDocuments;
   }
@@ -1510,6 +1524,7 @@ function App() {
     setInsuranceDocumentPreviewUrl("");
     setInsuranceDocumentMode("manage");
     setInsuranceDocumentEditName("");
+    setAddingNewInsuranceDocument(false);
     setShowInsuranceDocument(true);
     setInsuranceDocumentBusy(true);
 
@@ -1527,6 +1542,20 @@ function App() {
     setInsuranceDocumentPreviewUrl("");
     setInsuranceDocumentMode("manage");
     setInsuranceDocumentEditName(document.displayName || displayInsuranceDocumentName(document.name));
+    setAddingNewInsuranceDocument(false);
+  }
+
+  function beginNewInsuranceDocument() {
+    if (insuranceDocumentPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(insuranceDocumentPreviewUrl);
+    }
+    setInsuranceDocumentFile(null);
+    setInsuranceDocumentName("");
+    setSelectedInsuranceDocument(null);
+    setInsuranceDocumentPreviewUrl("");
+    setInsuranceDocumentMode("manage");
+    setInsuranceDocumentEditName("");
+    setAddingNewInsuranceDocument(true);
   }
 
   function selectInsuranceDocumentFile(event) {
@@ -1545,6 +1574,7 @@ function App() {
     setInsuranceDocumentName(baseName);
     setSelectedInsuranceDocument(null);
     setInsuranceDocumentPreviewUrl("");
+    setAddingNewInsuranceDocument(true);
   }
 
   async function previewInsuranceDocument() {
@@ -1733,6 +1763,7 @@ function App() {
     setInsuranceDocumentPreviewUrl("");
     setInsuranceDocumentMode("manage");
     setInsuranceDocumentEditName("");
+    setAddingNewInsuranceDocument(false);
     setInsuranceDocumentBusy(false);
     setSaveMessage("Document saved");
 
@@ -1740,6 +1771,7 @@ function App() {
     if (addAnother) {
       await loadInsuranceDocuments(documentPolicy);
       setSelectedInsuranceDocument(null);
+      setAddingNewInsuranceDocument(true);
       return;
     }
 
@@ -1990,11 +2022,6 @@ function App() {
     setLabForm((current) => ({ ...current, [name]: value }));
   }
 
-  function handleLabFileChange(event) {
-    const file = event.target.files?.[0] || null;
-    if (!file) return;
-    setLabForm((current) => ({ ...current, reportFile: file }));
-  }
 
   function addLabResult() {
     clearPendingDocument();
@@ -2013,38 +2040,12 @@ function App() {
       return;
     }
 
-    if (!labForm.reportFile) {
-      window.alert("Please attach the lab report.");
-      return;
-    }
-
-    const originalName = labForm.reportFile.name || "lab-report";
-    const cleanName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const storagePath = `${userId}/${Date.now()}-${cleanName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("lab-results")
-      .upload(storagePath, labForm.reportFile, {
-        contentType: labForm.reportFile.type || undefined,
-        upsert: false,
-      });
-
-    if (uploadError) {
-      console.error("Could not upload lab report:", uploadError);
-      window.alert("The lab report could not be uploaded. Make sure the lab-results storage bucket has been created.");
-      return;
-    }
-
     const payload = {
       user_id: userId,
       test_date: safeDate(labForm.testDate),
       lab_name: labForm.labName || null,
-      file_name: originalName,
-      file_type: labForm.reportFile.type || null,
-      storage_path: storagePath,
     };
 
-    const existing = editingLabId ? labResults.find((lab) => lab.id === editingLabId) : null;
     let query;
     if (editingLabId) {
       query = supabase.from("lab_results").update(payload).eq("id", editingLabId);
@@ -2055,7 +2056,6 @@ function App() {
     const { data: savedRows, error: databaseError } = await query.select("id");
     if (databaseError) {
       console.error("Could not save lab result:", databaseError);
-      await supabase.storage.from("lab-results").remove([storagePath]);
       window.alert("The lab result could not be saved.");
       return;
     }
@@ -2069,10 +2069,6 @@ function App() {
     }
 
     const savedLab = { ...labForm, id: savedId };
-
-    if (existing?.storagePath) {
-      await supabase.storage.from("lab-results").remove([existing.storagePath]);
-    }
 
     setLabForm(emptyLabResult);
     setEditingLabId(null);
@@ -2090,7 +2086,6 @@ function App() {
     setLabForm({
       testDate: lab.testDate,
       labName: lab.labName,
-      reportFile: null,
     });
     setEditingLabId(lab.id);
     setSelectedLabId(null);
@@ -2098,18 +2093,13 @@ function App() {
   }
 
   async function deleteLabResult(id) {
-    if (!window.confirm("Are you sure you want to delete this lab result and its attached report?")) return;
+    if (!window.confirm("Are you sure you want to delete this lab result?")) return;
 
-    const lab = labResults.find((item) => item.id === id);
     const { error } = await supabase.from("lab_results").delete().eq("id", id);
     if (error) {
       console.error("Could not delete lab result:", error);
       window.alert("The lab result could not be deleted.");
       return;
-    }
-
-    if (lab?.storagePath) {
-      await supabase.storage.from("lab-results").remove([lab.storagePath]);
     }
 
     setLabResults((currentResults) => currentResults.filter((item) => item.id !== id));
@@ -2124,32 +2114,6 @@ function App() {
     setEditingLabId(null);
     setSelectedLabId(null);
     setShowLabForm(false);
-  }
-
-  async function viewLabReport(lab) {
-    if (lab.storagePath) {      
-      const { data, error } = await supabase.storage
-        .from("lab-results")
-        .createSignedUrl(lab.storagePath, 60);
-
-      if (error || !data?.signedUrl) {
-        console.error("Could not open lab report:", error);
-        window.alert("The lab report could not be opened.");
-        return;
-      }
-
-     window.location.href = data.signedUrl;
-      return;
-    }
-
-    if (lab.reportFile) {
-      const url = URL.createObjectURL(lab.reportFile);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      return;
-    }
-
-    window.alert("No report is attached.");
   }
 
 
@@ -2180,8 +2144,8 @@ function App() {
 
     setSavedLabDocuments(storedDocuments);
     setSelectedLabDocument((current) => {
-      if (!current) return storedDocuments[0] || null;
-      return storedDocuments.find((item) => item.path === current.path) || storedDocuments[0] || null;
+      if (!current) return null;
+      return storedDocuments.find((item) => item.path === current.path) || null;
     });
     return storedDocuments;
   }
@@ -2198,6 +2162,7 @@ function App() {
     setLabDocumentPreviewUrl("");
     setLabDocumentMode("manage");
     setLabDocumentEditName("");
+    setAddingNewLabDocument(false);
     setShowLabDocument(true);
     setLabDocumentBusy(true);
     await loadLabDocuments(lab);
@@ -2212,6 +2177,18 @@ function App() {
     setLabDocumentPreviewUrl("");
     setLabDocumentMode("manage");
     setLabDocumentEditName(document.displayName || displayInsuranceDocumentName(document.name));
+    setAddingNewLabDocument(false);
+  }
+
+  function beginNewLabDocument() {
+    if (labDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(labDocumentPreviewUrl);
+    setLabDocumentFile(null);
+    setLabDocumentName("");
+    setSelectedLabDocument(null);
+    setLabDocumentPreviewUrl("");
+    setLabDocumentMode("manage");
+    setLabDocumentEditName("");
+    setAddingNewLabDocument(true);
   }
 
   function selectLabDocumentFile(event) {
@@ -2225,6 +2202,7 @@ function App() {
     setLabDocumentName(lastDot > 0 ? originalName.slice(0, lastDot) : originalName);
     setSelectedLabDocument(null);
     setLabDocumentPreviewUrl("");
+    setAddingNewLabDocument(true);
   }
 
   async function previewLabDocument() {
@@ -2380,6 +2358,7 @@ function App() {
     setLabDocumentPreviewUrl("");
     setLabDocumentMode("manage");
     setLabDocumentEditName("");
+    setAddingNewLabDocument(false);
     setLabDocumentBusy(false);
     setSaveMessage("Document saved");
 
@@ -2387,6 +2366,7 @@ function App() {
     if (addAnother) {
       await loadLabDocuments(documentLab);
       setSelectedLabDocument(null);
+      setAddingNewLabDocument(true);
       return;
     }
 
@@ -2437,8 +2417,8 @@ function App() {
     }));
     setSavedNoteDocuments(storedDocuments);
     setSelectedNoteDocument((current) => {
-      if (!current) return storedDocuments[0] || null;
-      return storedDocuments.find((item) => item.path === current.path) || storedDocuments[0] || null;
+      if (!current) return null;
+      return storedDocuments.find((item) => item.path === current.path) || null;
     });
     return storedDocuments;
   }
@@ -2448,6 +2428,7 @@ function App() {
     if (!userId || !note?.id) return;
     setDocumentNote(note); setNoteDocumentFile(null); setNoteDocumentName(""); setSavedNoteDocuments([]);
     setSelectedNoteDocument(null); setNoteDocumentPreviewUrl(""); setNoteDocumentMode("manage"); setNoteDocumentEditName("");
+    setAddingNewNoteDocument(false);
     setShowNoteDocument(true); setNoteDocumentBusy(true);
     await loadNoteDocuments(note); setNoteDocumentBusy(false);
   }
@@ -2460,6 +2441,18 @@ function App() {
     setNoteDocumentPreviewUrl("");
     setNoteDocumentMode("manage");
     setNoteDocumentEditName(document.displayName || displayInsuranceDocumentName(document.name));
+    setAddingNewNoteDocument(false);
+  }
+
+  function beginNewNoteDocument() {
+    if (noteDocumentPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(noteDocumentPreviewUrl);
+    setNoteDocumentFile(null);
+    setNoteDocumentName("");
+    setSelectedNoteDocument(null);
+    setNoteDocumentPreviewUrl("");
+    setNoteDocumentMode("manage");
+    setNoteDocumentEditName("");
+    setAddingNewNoteDocument(true);
   }
 
   function selectNoteDocumentFile(event) {
@@ -2469,6 +2462,7 @@ function App() {
     const originalName = file.name || "document"; const lastDot = originalName.lastIndexOf(".");
     setNoteDocumentName(lastDot > 0 ? originalName.slice(0, lastDot) : originalName);
     setSelectedNoteDocument(null); setNoteDocumentPreviewUrl("");
+    setAddingNewNoteDocument(true);
   }
 
   async function previewNoteDocument() {
@@ -2608,6 +2602,7 @@ function App() {
     setNoteDocumentPreviewUrl("");
     setNoteDocumentMode("manage");
     setNoteDocumentEditName("");
+    setAddingNewNoteDocument(false);
     setNoteDocumentBusy(false);
     setSaveMessage("Document saved");
 
@@ -2615,6 +2610,7 @@ function App() {
     if (addAnother) {
       await loadNoteDocuments(documentNote);
       setSelectedNoteDocument(null);
+      setAddingNewNoteDocument(true);
       return;
     }
 
@@ -2974,7 +2970,7 @@ if (!session) {
               label: personalInfo.fullName || "Personal Information",
             })}
           >
-            Add / View Document
+            Review Documents
           </button>
 
           {saveMessage && <div className="save-message">{saveMessage}</div>}
@@ -2992,7 +2988,7 @@ if (!session) {
       if (insuranceDocumentMode === "view" && insuranceDocumentPreviewUrl) {
         return (
           <main className="app document-fullscreen-viewer">
-            <h1>Insurance Document</h1>
+            <h1>Saved Documents</h1>
             <p className="document-policy-name">
               {selectedInsuranceDocument?.displayName || selectedInsuranceDocument?.name || "Document"}
             </p>
@@ -3032,13 +3028,13 @@ if (!session) {
             <button className="home-button" onClick={goHome}>Home</button>
           </div>
 
-          <h1>Insurance Document</h1>
+          <h1>Saved Documents</h1>
           <p className="document-policy-name">
             {documentPolicy?.insuranceCompany || "Insurance"}
           </p>
 
           <div className="form-card document-card">
-            {!selectedInsuranceDocument && insuranceDocumentMode !== "edit" && (
+            {!selectedInsuranceDocument && insuranceDocumentMode !== "edit" && (savedInsuranceDocuments.length === 0 || addingNewInsuranceDocument) && (
               <>
                 <div className="document-source-buttons">
                   <label className="document-source-button">
@@ -3110,6 +3106,7 @@ if (!session) {
 
             {savedInsuranceDocuments.length > 0 && insuranceDocumentMode !== "edit" && (
               <div className="saved-documents-section">
+                {!addingNewInsuranceDocument && <button className="document-source-button" type="button" onClick={beginNewInsuranceDocument} disabled={insuranceDocumentBusy}>+ Add Another Document</button>}
                 <h2>Saved Documents</h2>
                 <div className="saved-documents-list">
                   {savedInsuranceDocuments.map((document) => (
@@ -3262,7 +3259,7 @@ if (!session) {
                 </button>
 
                 <button className="document-button" onClick={() => openInsuranceDocument(policy)}>
-                  Add / View Document
+                  Review Documents
                 </button>
 
                 <button
@@ -3441,7 +3438,7 @@ if (!session) {
                 label: selectedDoctor.doctorName || `Doctor ${selectedDoctorIndex + 1}`,
               })}
             >
-              Add / View Document
+              Review Documents
             </button>
 
             <div className="card-actions">
@@ -3559,7 +3556,7 @@ if (!session) {
                   label: surgery.procedureName || `Surgery ${index + 1}`,
                 })}
               >
-                Add / View Document
+                Review Documents
               </button>
 
               <div className="card-actions">
@@ -3691,11 +3688,11 @@ if (!session) {
           <button className="back-button" type="button" onClick={closeLabDocument}>← Back</button>
           <button className="home-button" type="button" onClick={goHome}>Home</button>
         </div>
-          <h1>Lab Document</h1>
+          <h1>Saved Documents</h1>
           <p className="document-policy-name">{documentLab?.labName || "Lab Result"}</p>
 
           <div className="form-card document-card">
-            {!selectedLabDocument && labDocumentMode !== "edit" && (
+            {!selectedLabDocument && labDocumentMode !== "edit" && (savedLabDocuments.length === 0 || addingNewLabDocument) && (
               <>
                 <div className="document-source-buttons">
                   <label className="document-source-button">Take Photo
@@ -3724,6 +3721,7 @@ if (!session) {
 
             {savedLabDocuments.length > 0 && labDocumentMode !== "edit" && (
               <div className="saved-documents-section">
+                {!addingNewLabDocument && <button className="document-source-button" type="button" onClick={beginNewLabDocument} disabled={labDocumentBusy}>+ Add Another Document</button>}
                 <h2>Saved Documents</h2>
                 <div className="saved-documents-list">
                   {savedLabDocuments.map((document) => (
@@ -3812,18 +3810,14 @@ if (!session) {
             </button>
             <h2>{lab.labName}</h2>
             <p><strong>Date of Test:</strong> {lab.testDate}</p>
-            <p><strong>Report:</strong>{" "}{lab.fileName || "Attached Lab Report"}</p>
 
-            <button className="view-report-button" type="button" onClick={() => viewLabReport(lab)}>
-              View Report
-            </button>
             <button className="document-button" type="button" onClick={() => openLabDocument(lab)}>
-              Add / View Document
+              Review Documents
             </button>
 
             <div className="card-actions">
               <button className="edit-button" type="button" onClick={() => editLabResult(lab)}>
-                Edit / Replace Report
+                Edit
               </button>
               <button className="delete-button" type="button" onClick={() => deleteLabResult(lab.id)}>
                 Delete
@@ -3855,19 +3849,17 @@ if (!session) {
             />
           </label>
 
-          <label>
-            Lab Report
-            <input
-              type="file"
-              accept="application/pdf,image/*"
-              onChange={handleLabFileChange}
-            />
-          </label>
-
-          {labForm.reportFile && (
-            <div className="selected-file">
-              Selected: {labForm.reportFile.name || "Attached report"}
-            </div>
+          {editingLabId && (
+            <button
+              className="document-button"
+              type="button"
+              onClick={() => {
+                const lab = labResults.find((item) => item.id === editingLabId);
+                if (lab) openLabDocument(lab);
+              }}
+            >
+              Review Documents
+            </button>
           )}
 
           <button
@@ -3926,7 +3918,7 @@ if (activeSection?.name === "Appointments") {
           label: `${formatDate(selectedAppointment.date)}${selectedAppointment.doctor ? ` - ${selectedAppointment.doctor}` : ""}`,
         })}
       >
-        Add / View Document
+        Review Documents
       </button>
       <button onClick={() => {
         setAppointmentForm(selectedAppointment);
@@ -4068,11 +4060,11 @@ if (activeSection?.name === "Miscellaneous Info") {
           <button className="back-button" type="button" onClick={closeNoteDocument}>← Back</button>
           <button className="home-button" type="button" onClick={goHome}>Home</button>
         </div>
-        <h1>Note Document</h1>
+        <h1>Saved Documents</h1>
         <p className="document-policy-name">{documentNote?.title || "Note"}</p>
 
         <div className="form-card document-card">
-          {!selectedNoteDocument && noteDocumentMode !== "edit" && (
+          {!selectedNoteDocument && noteDocumentMode !== "edit" && (savedNoteDocuments.length === 0 || addingNewNoteDocument) && (
             <>
               <div className="document-source-buttons">
                 <label className="document-source-button">Take Photo
@@ -4101,6 +4093,7 @@ if (activeSection?.name === "Miscellaneous Info") {
 
           {savedNoteDocuments.length > 0 && noteDocumentMode !== "edit" && (
             <div className="saved-documents-section">
+              {!addingNewNoteDocument && <button className="document-source-button" type="button" onClick={beginNewNoteDocument} disabled={noteDocumentBusy}>+ Add Another Document</button>}
               <h2>Saved Documents</h2>
               <div className="saved-documents-list">
                 {savedNoteDocuments.map((document) => (
@@ -4209,7 +4202,7 @@ if (activeSection?.name === "Miscellaneous Info") {
             type="button"
             onClick={() => openNoteDocument(selectedNote)}
           >
-            Add / View Document
+            Review Documents
           </button>
 
           <div className="card-actions">
