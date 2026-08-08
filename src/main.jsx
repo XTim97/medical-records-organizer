@@ -509,6 +509,7 @@ function App() {
   const [pendingDocumentFile, setPendingDocumentFile] = useState(null);
   const [pendingDocumentName, setPendingDocumentName] = useState("");
   const [pendingDocumentKind, setPendingDocumentKind] = useState("");
+  const [pendingDocumentChooserKind, setPendingDocumentChooserKind] = useState("");
 
   const [appointments, setAppointments] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsAppointments");
@@ -645,6 +646,70 @@ function App() {
     setPendingDocumentFile(null);
     setPendingDocumentName("");
     setPendingDocumentKind("");
+    setPendingDocumentChooserKind("");
+  }
+
+  function renderPendingDocumentPicker(kind) {
+    const isOpen = pendingDocumentChooserKind === kind;
+    const hasDocument = pendingDocumentKind === kind && pendingDocumentFile;
+
+    return (
+      <div className="pending-document-section">
+        <button
+          className="document-button"
+          type="button"
+          onClick={() => setPendingDocumentChooserKind(isOpen ? "" : kind)}
+        >
+          Add Document
+        </button>
+
+        {isOpen && (
+          <div className="pending-document-panel">
+            <div className="document-source-buttons">
+              <label className="document-source-button">
+                Take Photo
+                <input
+                  className="document-file-input"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(event) => selectPendingDocument(event, kind)}
+                />
+              </label>
+              <label className="document-source-button">
+                Choose File
+                <input
+                  className="document-file-input"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(event) => selectPendingDocument(event, kind)}
+                />
+              </label>
+            </div>
+
+            {hasDocument && (
+              <div className="document-selected-file">
+                <span>Selected file:</span>
+                <strong>{pendingDocumentFile.name}</strong>
+                <label className="document-name-label">
+                  Document Name
+                  <input
+                    type="text"
+                    value={pendingDocumentName}
+                    onChange={(event) => setPendingDocumentName(event.target.value)}
+                    placeholder="Enter a name for this document"
+                  />
+                </label>
+                <div className="document-action-buttons">
+                  <button className="edit-button" type="button" onClick={() => viewPendingDocument(kind)}>View</button>
+                  <button className="delete-button" type="button" onClick={clearPendingDocument}>Remove</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   }
 
   function selectPendingDocument(event, kind) {
@@ -2661,8 +2726,8 @@ function App() {
     const userId = session?.user?.id;
     if (!userId) return;
 
-    if (!noteForm.date || !noteForm.title.trim() || !noteForm.note.trim()) {
-      window.alert("Please enter a date, title, and note.");
+    if (!noteForm.date || !noteForm.title.trim()) {
+      window.alert("Please enter a date and title.");
       return;
     }
 
@@ -3343,6 +3408,8 @@ if (!session) {
               />
             </label>
 
+            {editingInsuranceIndex === null && renderPendingDocumentPicker("insurance")}
+
             <button className="save-button" onClick={saveInsurance}>
               Save Insurance
             </button>
@@ -3484,6 +3551,8 @@ if (!session) {
               Phone Number
               <input name="phoneNumber" value={doctorForm.phoneNumber} onChange={handleDoctorChange} />
             </label>
+
+            {editingDoctorIndex === null && renderPendingDocumentPicker("doctor")}
 
             <button className="save-button" onClick={saveDoctor}>Save Doctor</button>
             <button className="cancel-button" onClick={cancelDoctorEdit}>Cancel</button>
@@ -3635,6 +3704,8 @@ if (!session) {
                 rows="4"
               />
             </label>
+
+            {editingSurgeryIndex === null && renderPendingDocumentPicker("surgery")}
 
             <button className="save-button" onClick={saveSurgery}>
               Save Surgery
@@ -3862,6 +3933,8 @@ if (!session) {
             </button>
           )}
 
+          {!editingLabId && renderPendingDocumentPicker("lab")}
+
           <button
             className="save-button"
             type="button"
@@ -3961,6 +4034,7 @@ if (activeSection?.name === "Appointments") {
         <div className="appointment-menu">
           <button className="appointment-menu-button appointment-new" onClick={() => {
             closeSelectedAppointment();
+            clearPendingDocument();
             setAppointmentView("new");
           }}>New Appointment</button>
           <button className="appointment-menu-button appointment-upcoming" onClick={() => {
@@ -4000,6 +4074,8 @@ if (activeSection?.name === "Appointments") {
           <label>Notes</label>
           <textarea rows="4" value={appointmentForm.notes} onChange={(e) => setAppointmentForm({ ...appointmentForm, notes: e.target.value })} />
         </div>
+        {editingAppointmentIndex === null && renderPendingDocumentPicker("appointment")}
+
         <button onClick={saveAppointment}>
           {editingAppointmentIndex !== null ? "Update Appointment" : "Add Appointment"}
         </button>
@@ -4257,7 +4333,7 @@ if (activeSection?.name === "Miscellaneous Info") {
           </label>
 
           <label>
-            Note
+            Note (Optional)
             <textarea
               name="note"
               value={noteForm.note}
@@ -4266,6 +4342,8 @@ if (activeSection?.name === "Miscellaneous Info") {
               placeholder="Enter your note here"
             />
           </label>
+          {editingNoteIndex === null && renderPendingDocumentPicker("note")}
+
           <button className="save-button" type="button" onClick={saveNote}>
             {editingNoteIndex !== null ? "Update Note" : "Save Note"}
           </button>
