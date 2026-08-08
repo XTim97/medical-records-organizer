@@ -573,11 +573,13 @@ function App() {
   const [surgeryForm, setSurgeryForm] = useState(emptySurgery);
   const [editingSurgeryIndex, setEditingSurgeryIndex] = useState(null);
   const [showSurgeryForm, setShowSurgeryForm] = useState(false);
+  const [selectedSurgeryIndex, setSelectedSurgeryIndex] = useState(null);
 
   const [labResults, setLabResults] = useState([]);
   const [labForm, setLabForm] = useState(emptyLabResult);
   const [editingLabId, setEditingLabId] = useState(null);
   const [showLabForm, setShowLabForm] = useState(false);
+  const [selectedLabId, setSelectedLabId] = useState(null);
   const [showLabDocument, setShowLabDocument] = useState(false);
   const [documentLab, setDocumentLab] = useState(null);
   const [labDocumentFile, setLabDocumentFile] = useState(null);
@@ -649,7 +651,7 @@ function App() {
   }
 
   async function uploadPendingDocument(userId, kind, recordId, bucket, folder) {
-    if (!pendingDocumentFile || pendingDocumentKind !== kind || !recordId) return true;
+    if (!pendingDocumentFile || pendingDocumentKind !== kind || !recordId) return false;
 
     const trimmedName = (pendingDocumentName || "document").trim() || "document";
     const originalName = pendingDocumentFile.name || "document";
@@ -1214,10 +1216,12 @@ function App() {
 
     setShowSurgeryForm(false);
     setEditingSurgeryIndex(null);
+    setSelectedSurgeryIndex(null);
     setSurgeryForm(emptySurgery);
 
     setShowLabForm(false);
     setEditingLabId(null);
+    setSelectedLabId(null);
     setShowLabDocument(false);
     setDocumentLab(null);
     setLabDocumentMode("manage");
@@ -1896,6 +1900,7 @@ function App() {
     clearPendingDocument();
     setSurgeryForm(emptySurgery);
     setEditingSurgeryIndex(null);
+    setSelectedSurgeryIndex(null);
     setShowSurgeryForm(true);
   }
 
@@ -1947,6 +1952,7 @@ function App() {
   function editSurgery(index) {
     setSurgeryForm(surgeries[index]);
     setEditingSurgeryIndex(index);
+    setSelectedSurgeryIndex(null);
     setShowSurgeryForm(true);
   }
 
@@ -1967,6 +1973,7 @@ function App() {
       return remainingSurgeries;
     });
     setEditingSurgeryIndex(null);
+    setSelectedSurgeryIndex(null);
     setShowSurgeryForm(false);
     setSaveMessage("Surgery deleted");
   }
@@ -1974,6 +1981,7 @@ function App() {
   function cancelSurgeryEdit() {
     setSurgeryForm(emptySurgery);
     setEditingSurgeryIndex(null);
+    setSelectedSurgeryIndex(null);
     setShowSurgeryForm(false);
   }
 
@@ -1992,6 +2000,7 @@ function App() {
     clearPendingDocument();
     setLabForm(emptyLabResult);
     setEditingLabId(null);
+    setSelectedLabId(null);
     setShowLabForm(true);
   }
 
@@ -2084,6 +2093,7 @@ function App() {
       reportFile: null,
     });
     setEditingLabId(lab.id);
+    setSelectedLabId(null);
     setShowLabForm(true);
   }
 
@@ -2104,6 +2114,7 @@ function App() {
 
     setLabResults((currentResults) => currentResults.filter((item) => item.id !== id));
     setEditingLabId(null);
+    setSelectedLabId(null);
     setShowLabForm(false);
     setSaveMessage("Lab result deleted");
   }
@@ -2111,6 +2122,7 @@ function App() {
   function cancelLabEdit() {
     setLabForm(emptyLabResult);
     setEditingLabId(null);
+    setSelectedLabId(null);
     setShowLabForm(false);
   }
 
@@ -3214,13 +3226,6 @@ if (!session) {
                 >
                   {policy.insuranceCompany || `Insurance ${index + 1}`}
                 </button>
-                <button
-                  type="button"
-                  className="document-button record-document-button"
-                  onClick={() => openInsuranceDocument(policy)}
-                >
-                  Add / View Document
-                </button>
               </div>
             ))}
           </div>
@@ -3341,33 +3346,6 @@ if (!session) {
               />
             </label>
 
-
-            <div className="document-action-buttons">
-              <label className="document-source-button">
-                Add Document
-                <input
-                  id="new-insurance-document"
-                  className="document-file-input"
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={(event) => selectPendingDocument(event, "insurance")}
-                />
-              </label>
-              <button
-                className="edit-button"
-                type="button"
-                onClick={() => viewPendingDocument("insurance")}
-                disabled={!pendingDocumentFile || pendingDocumentKind !== "insurance"}
-              >
-                View Document
-              </button>
-            </div>
-            {pendingDocumentFile && pendingDocumentKind === "insurance" && (
-              <div className="selected-file">
-                Selected document: {pendingDocumentFile.name || pendingDocumentName}
-              </div>
-            )}
-
             <button className="save-button" onClick={saveInsurance}>
               Save Insurance
             </button>
@@ -3424,18 +3402,6 @@ if (!session) {
                     </span>
                     <span>{doctor.specialty || "Specialty not entered"}</span>
                     <span>{doctor.phoneNumber || "Phone number not entered"}</span>
-                  </button>
-                  <button
-                    className="document-button record-document-button"
-                    type="button"
-                    onClick={() => setGeneralDocumentTarget({
-                      kind: "doctor",
-                      id: doctor.id || index,
-                      heading: "Doctor Documents",
-                      label: doctor.doctorName || `Doctor ${index + 1}`,
-                    })}
-                  >
-                    Add / View Document
                   </button>
                 </div>
               ))}
@@ -3522,32 +3488,6 @@ if (!session) {
               <input name="phoneNumber" value={doctorForm.phoneNumber} onChange={handleDoctorChange} />
             </label>
 
-            <div className="document-action-buttons">
-              <label className="document-source-button">
-                Add Document
-                <input
-                  id="new-doctor-document"
-                  className="document-file-input"
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={(event) => selectPendingDocument(event, "doctor")}
-                />
-              </label>
-              <button
-                className="edit-button"
-                type="button"
-                onClick={() => viewPendingDocument("doctor")}
-                disabled={!pendingDocumentFile || pendingDocumentKind !== "doctor"}
-              >
-                View Document
-              </button>
-            </div>
-            {pendingDocumentFile && pendingDocumentKind === "doctor" && (
-              <div className="selected-file">
-                Selected document: {pendingDocumentFile.name || pendingDocumentName}
-              </div>
-            )}
-
             <button className="save-button" onClick={saveDoctor}>Save Doctor</button>
             <button className="cancel-button" onClick={cancelDoctorEdit}>Cancel</button>
           </div>
@@ -3566,7 +3506,7 @@ if (!session) {
 
         <h1>Surgeries</h1>
 
-        {!showSurgeryForm && (
+        {!showSurgeryForm && selectedSurgeryIndex === null && (
           <button
             className="add-button surgeries-add-button"
             onClick={addSurgery}
@@ -3575,35 +3515,39 @@ if (!session) {
           </button>
         )}
 
-        {!showSurgeryForm &&
+        {!showSurgeryForm && selectedSurgeryIndex === null &&
           surgeries.map((surgery, index) => (
-            <div className="surgery-card" key={index}>
+            <div
+              className="surgery-card clickable"
+              key={surgery.id || index}
+              onClick={() => setSelectedSurgeryIndex(index)}
+            >
               <h2>{surgery.procedureName || `Surgery ${index + 1}`}</h2>
+              {surgery.surgeryDate && <p><strong>Date:</strong> {surgery.surgeryDate}</p>}
+              {surgery.surgeon && <p><strong>Surgeon:</strong> {surgery.surgeon}</p>}
+            </div>
+          ))}
 
-              {surgery.surgeryDate && (
-                <p><strong>Date:</strong> {surgery.surgeryDate}</p>
-              )}
-
-              {surgery.surgeon && (
-                <p><strong>Surgeon:</strong> {surgery.surgeon}</p>
-              )}
-
-              {surgery.facility && (
-                <p><strong>Hospital / Facility:</strong> {surgery.facility}</p>
-              )}
-
+        {!showSurgeryForm && selectedSurgeryIndex !== null && surgeries[selectedSurgeryIndex] && (() => {
+          const surgery = surgeries[selectedSurgeryIndex];
+          const index = selectedSurgeryIndex;
+          return (
+            <div className="surgery-card surgery-detail-card">
+              <button
+                type="button"
+                className="back-button"
+                onClick={() => setSelectedSurgeryIndex(null)}
+              >
+                ← Surgery List
+              </button>
+              <h2>{surgery.procedureName || `Surgery ${index + 1}`}</h2>
+              {surgery.surgeryDate && <p><strong>Date:</strong> {surgery.surgeryDate}</p>}
+              {surgery.surgeon && <p><strong>Surgeon:</strong> {surgery.surgeon}</p>}
+              {surgery.facility && <p><strong>Hospital / Facility:</strong> {surgery.facility}</p>}
               {(surgery.city || surgery.state) && (
-                <p>
-                  <strong>Location:</strong>{" "}
-                  {[surgery.city, surgery.state]
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
+                <p><strong>Location:</strong>{" "}{[surgery.city, surgery.state].filter(Boolean).join(", ")}</p>
               )}
-
-              {surgery.notes && (
-                <p><strong>Notes:</strong> {surgery.notes}</p>
-              )}
+              {surgery.notes && <p><strong>Notes:</strong> {surgery.notes}</p>}
 
               <button
                 className="document-button"
@@ -3619,22 +3563,12 @@ if (!session) {
               </button>
 
               <div className="card-actions">
-                <button
-                  className="edit-button"
-                  onClick={() => editSurgery(index)}
-                >
-                  Edit
-                </button>
-
-                <button
-                  className="delete-button"
-                  onClick={() => deleteSurgery(index)}
-                >
-                  Delete
-                </button>
+                <button className="edit-button" onClick={() => editSurgery(index)}>Edit</button>
+                <button className="delete-button" onClick={() => deleteSurgery(index)}>Delete</button>
               </div>
             </div>
-          ))}
+          );
+        })()}
 
         {showSurgeryForm && (
           <div className="form-card">
@@ -3704,33 +3638,6 @@ if (!session) {
                 rows="4"
               />
             </label>
-
-
-            <div className="document-action-buttons">
-              <label className="document-source-button">
-                Add Document
-                <input
-                  id="new-surgery-document"
-                  className="document-file-input"
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={(event) => selectPendingDocument(event, "surgery")}
-                />
-              </label>
-              <button
-                className="edit-button"
-                type="button"
-                onClick={() => viewPendingDocument("surgery")}
-                disabled={!pendingDocumentFile || pendingDocumentKind !== "surgery"}
-              >
-                View Document
-              </button>
-            </div>
-            {pendingDocumentFile && pendingDocumentKind === "surgery" && (
-              <div className="selected-file">
-                Selected document: {pendingDocumentFile.name || pendingDocumentName}
-              </div>
-            )}
 
             <button className="save-button" onClick={saveSurgery}>
               Save Surgery
@@ -3867,7 +3774,7 @@ if (!session) {
 
       <h1>Lab Results</h1>
 
-      {!showLabForm && (
+      {!showLabForm && selectedLabId === null && (
         <button
           className="add-button labs-add-button"
           type="button"
@@ -3877,61 +3784,54 @@ if (!session) {
         </button>
       )}
 
-      {!showLabForm && labResults.length === 0 && (
+      {!showLabForm && selectedLabId === null && labResults.length === 0 && (
         <div className="empty-message">
           No lab results have been added yet.
         </div>
       )}
 
-      {!showLabForm &&
+      {!showLabForm && selectedLabId === null &&
         labResults.map((lab) => (
-          <div className="lab-card" key={lab.id}>
+          <div
+            className="lab-card clickable"
+            key={lab.id}
+            onClick={() => setSelectedLabId(lab.id)}
+          >
             <h2>{lab.labName}</h2>
+            <p><strong>Date of Test:</strong> {lab.testDate}</p>
+          </div>
+        ))}
 
-            <p>
-              <strong>Date of Test:</strong> {lab.testDate}
-            </p>
+      {!showLabForm && selectedLabId !== null && (() => {
+        const lab = labResults.find((item) => item.id === selectedLabId);
+        if (!lab) return null;
+        return (
+          <div className="lab-card lab-detail-card">
+            <button type="button" className="back-button" onClick={() => setSelectedLabId(null)}>
+              ← Lab Results
+            </button>
+            <h2>{lab.labName}</h2>
+            <p><strong>Date of Test:</strong> {lab.testDate}</p>
+            <p><strong>Report:</strong>{" "}{lab.fileName || "Attached Lab Report"}</p>
 
-            <p>
-              <strong>Report:</strong>{" "}
-              {lab.fileName || "Attached Lab Report"}
-            </p>
-
-            <button
-              className="view-report-button"
-              type="button"
-              onClick={() => viewLabReport(lab)}
-            >
+            <button className="view-report-button" type="button" onClick={() => viewLabReport(lab)}>
               View Report
             </button>
-
-            <button
-              className="document-button"
-              type="button"
-              onClick={() => openLabDocument(lab)}
-            >
+            <button className="document-button" type="button" onClick={() => openLabDocument(lab)}>
               Add / View Document
             </button>
 
             <div className="card-actions">
-              <button
-                className="edit-button"
-                type="button"
-                onClick={() => editLabResult(lab)}
-              >
+              <button className="edit-button" type="button" onClick={() => editLabResult(lab)}>
                 Edit / Replace Report
               </button>
-
-              <button
-                className="delete-button"
-                type="button"
-                onClick={() => deleteLabResult(lab.id)}
-              >
+              <button className="delete-button" type="button" onClick={() => deleteLabResult(lab.id)}>
                 Delete
               </button>
             </div>
           </div>
-        ))}
+        );
+      })()}
 
       {showLabForm && (
         <div className="form-card">
@@ -3967,33 +3867,6 @@ if (!session) {
           {labForm.reportFile && (
             <div className="selected-file">
               Selected: {labForm.reportFile.name || "Attached report"}
-            </div>
-          )}
-
-
-          <div className="document-action-buttons">
-            <label className="document-source-button">
-              Add Document
-              <input
-                id="new-lab-document"
-                className="document-file-input"
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(event) => selectPendingDocument(event, "lab")}
-              />
-            </label>
-            <button
-              className="edit-button"
-              type="button"
-              onClick={() => viewPendingDocument("lab")}
-              disabled={!pendingDocumentFile || pendingDocumentKind !== "lab"}
-            >
-              View Document
-            </button>
-          </div>
-          {pendingDocumentFile && pendingDocumentKind === "lab" && (
-            <div className="selected-file">
-              Selected document: {pendingDocumentFile.name || pendingDocumentName}
             </div>
           )}
 
@@ -4080,21 +3953,6 @@ if (activeSection?.name === "Appointments") {
           <p><strong>{formatDate(appointment.date)}</strong> &nbsp; {formatTime(appointment.time)}</p>
           <p>{appointment.doctor}</p>
           <p>{appointment.specialty}</p>
-          <button
-            className="document-button record-document-button"
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setGeneralDocumentTarget({
-                kind: "appointment",
-                id: appointment.id || `${appointment.date}-${appointment.time}`,
-                heading: "Appointment Documents",
-                label: `${formatDate(appointment.date)}${appointment.doctor ? ` - ${appointment.doctor}` : ""}`,
-              });
-            }}
-          >
-            Add / View Document
-          </button>
         </div>
       ))}
     </div>
@@ -4150,32 +4008,6 @@ if (activeSection?.name === "Appointments") {
           <label>Notes</label>
           <textarea rows="4" value={appointmentForm.notes} onChange={(e) => setAppointmentForm({ ...appointmentForm, notes: e.target.value })} />
         </div>
-
-        <div className="document-action-buttons">
-          <label className="document-source-button">
-            Add Document
-            <input
-              id="new-appointment-document"
-              className="document-file-input"
-              type="file"
-              accept="image/*,application/pdf"
-              onChange={(event) => selectPendingDocument(event, "appointment")}
-            />
-          </label>
-          <button
-            className="edit-button"
-            type="button"
-            onClick={() => viewPendingDocument("appointment")}
-            disabled={!pendingDocumentFile || pendingDocumentKind !== "appointment"}
-          >
-            View Document
-          </button>
-        </div>
-        {pendingDocumentFile && pendingDocumentKind === "appointment" && (
-          <div className="selected-file">
-            Selected document: {pendingDocumentFile.name || pendingDocumentName}
-          </div>
-        )}
         <button onClick={saveAppointment}>
           {editingAppointmentIndex !== null ? "Update Appointment" : "Add Appointment"}
         </button>
@@ -4354,16 +4186,6 @@ if (activeSection?.name === "Miscellaneous Info") {
                 <strong>{formatDate(note.date)}</strong>
               </p>
               <h2>{note.title}</h2>
-              <button
-                className="document-button record-document-button"
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openNoteDocument(note);
-                }}
-              >
-                Add / View Document
-              </button>
             </div>
           ))}
         </div>
@@ -4387,7 +4209,7 @@ if (activeSection?.name === "Miscellaneous Info") {
             type="button"
             onClick={() => openNoteDocument(selectedNote)}
           >
-            Document
+            Add / View Document
           </button>
 
           <div className="card-actions">
@@ -4451,33 +4273,6 @@ if (activeSection?.name === "Miscellaneous Info") {
               placeholder="Enter your note here"
             />
           </label>
-
-
-          <div className="document-action-buttons">
-            <label className="document-source-button">
-              Add Document
-              <input
-                id="new-note-document"
-                className="document-file-input"
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(event) => selectPendingDocument(event, "note")}
-              />
-            </label>
-            <button
-              className="edit-button"
-              type="button"
-              onClick={() => viewPendingDocument("note")}
-              disabled={!pendingDocumentFile || pendingDocumentKind !== "note"}
-            >
-              View Document
-            </button>
-          </div>
-          {pendingDocumentFile && pendingDocumentKind === "note" && (
-            <div className="selected-file">
-              Selected document: {pendingDocumentFile.name || pendingDocumentName}
-            </div>
-          )}
           <button className="save-button" type="button" onClick={saveNote}>
             {editingNoteIndex !== null ? "Update Note" : "Save Note"}
           </button>
