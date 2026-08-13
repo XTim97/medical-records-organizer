@@ -639,6 +639,71 @@ function App() {
     return value || null;
   }
 
+  function normalizeLabDateForStorage(value) {
+    const trimmed = (value || "").trim();
+    if (!trimmed) return null;
+
+    if (/^\d{4}-\d{2}$/.test(trimmed)) return `${trimmed}-01`;
+
+    const monthNames = {
+      jan: "01", january: "01", feb: "02", february: "02", mar: "03", march: "03",
+      apr: "04", april: "04", may: "05", jun: "06", june: "06", jul: "07", july: "07",
+      aug: "08", august: "08", sep: "09", sept: "09", september: "09", oct: "10", october: "10",
+      nov: "11", november: "11", dec: "12", december: "12",
+    };
+    const monthYear = trimmed.match(/^([A-Za-z]+)\s+(\d{4})$/);
+    if (monthYear) {
+      const month = monthNames[monthYear[1].toLowerCase()];
+      if (month) return `${monthYear[2]}-${month}-01`;
+    }
+
+    return trimmed;
+  }
+
+  function displayLabDate(value) {
+    const trimmed = (value || "").trim();
+    const monthOnly = trimmed.match(/^(\d{4})-(\d{2})-01$/);
+    if (monthOnly) return `${monthOnly[1]}-${monthOnly[2]}`;
+    return trimmed;
+  }
+
+  function parseLabDocumentFilename(fileName) {
+    const originalName = fileName || "";
+    const lastDot = originalName.lastIndexOf(".");
+    const baseName = (lastDot > 0 ? originalName.slice(0, lastDot) : originalName)
+      .replace(/[_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const months = {
+      jan: "01", january: "01", feb: "02", february: "02", mar: "03", march: "03",
+      apr: "04", april: "04", may: "05", jun: "06", june: "06", jul: "07", july: "07",
+      aug: "08", august: "08", sep: "09", sept: "09", september: "09", oct: "10", october: "10",
+      nov: "11", november: "11", dec: "12", december: "12",
+    };
+
+    let name = baseName;
+    let date = "";
+
+    const exactDate = baseName.match(/^(.*?)[\s_-]+(\d{4})[-_](\d{1,2})[-_](\d{1,2})$/);
+    if (exactDate) {
+      name = exactDate[1].trim();
+      date = `${exactDate[2]}-${String(exactDate[3]).padStart(2, "0")}-${String(exactDate[4]).padStart(2, "0")}`;
+      return { name, date };
+    }
+
+    const monthYear = baseName.match(/^(.*?)[\s_-]+([A-Za-z]+)\s+(\d{4})$/);
+    if (monthYear) {
+      const month = months[monthYear[2].toLowerCase()];
+      if (month) {
+        name = monthYear[1].trim();
+        date = `${monthYear[3]}-${month}`;
+      }
+    }
+
+    return { name, date };
+  }
+
   function safeTime(value) {
     return value || null;
   }
@@ -658,6 +723,15 @@ function App() {
     const originalName = file.name || "document";
     const lastDot = originalName.lastIndexOf(".");
     setPendingDocumentName(lastDot > 0 ? originalName.slice(0, lastDot) : originalName);
+
+    if (kind === "lab") {
+      const parsed = parseLabDocumentFilename(originalName);
+      setLabForm((current) => ({
+        ...current,
+        labName: parsed.name || current.labName,
+        testDate: parsed.date || current.testDate,
+      }));
+    }
   }
 
   function viewPendingDocument(kind) {
@@ -862,7 +936,7 @@ function App() {
   function labFromRow(row) {
     return {
       id: row.id,
-      testDate: row.test_date || "",
+      testDate: displayLabDate(row.test_date || ""),
       labName: row.lab_name || "",
       category: row.category || "",
     };
@@ -2046,7 +2120,7 @@ function App() {
 
     const payload = {
       user_id: userId,
-      test_date: safeDate(labForm.testDate),
+      test_date: normalizeLabDateForStorage(labForm.testDate),
       lab_name: labForm.labName || null,
       category: labForm.category || selectedLabCategory || null,
     };
@@ -3903,7 +3977,7 @@ if (!session) {
           </h2>
           <label>
             Date of Test
-            <input name="testDate" value={labForm.testDate} onChange={handleLabChange} type="date" />
+            <input name="testDate" value={labForm.testDate} onChange={handleLabChange} type="text" placeholder="YYYY-MM-DD or YYYY-MM" />
           </label>
 
           <label>
