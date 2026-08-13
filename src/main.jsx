@@ -4485,7 +4485,19 @@ return (
       {sections.map((section) => (
         <button  key={section.name}
         className={section.className}
-        onClick={() => setActiveSection(section)}
+        onClick={() => {
+          if (section.name === "Lab / Procedures") {
+            setShowLabForm(false);
+            setShowLabSaveChoices(false);
+            setShowLabMoveChoices(false);
+            setSelectedLabId(null);
+            setSelectedLabCategory("");
+            setEditingLabId(null);
+            setLabForm(emptyLabResult);
+            clearPendingDocument();
+          }
+          setActiveSection(section);
+        }}
        >
         {section.name}
        </button>
