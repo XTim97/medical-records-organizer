@@ -8,7 +8,7 @@ const sections = [
   { name: "Insurance Information", className: "orange" },
   { name: "Doctors", className: "yellow" },
   { name: "Surgeries", className: "green" },
-  { name: "Lab Results", className: "blue" },
+  { name: "Lab / Procedures", className: "blue" },
   { name: "Appointments", className: "indigo" },
   { name: "Miscellaneous Info", className: "violet" },
 ];
@@ -509,7 +509,6 @@ function App() {
   const [pendingDocumentFile, setPendingDocumentFile] = useState(null);
   const [pendingDocumentName, setPendingDocumentName] = useState("");
   const [pendingDocumentKind, setPendingDocumentKind] = useState("");
-  const [pendingDocumentChooserKind, setPendingDocumentChooserKind] = useState("");
 
   const [appointments, setAppointments] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsAppointments");
@@ -608,6 +607,8 @@ function App() {
   const [labDocumentMode, setLabDocumentMode] = useState("manage");
   const [labDocumentEditName, setLabDocumentEditName] = useState("");
   const [addingNewLabDocument, setAddingNewLabDocument] = useState(false);
+  const [selectedLabCategory, setSelectedLabCategory] = useState("");
+  const [showLabMoveChoices, setShowLabMoveChoices] = useState(false);
 
   const [notes, setNotes] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsNotes");
@@ -646,70 +647,6 @@ function App() {
     setPendingDocumentFile(null);
     setPendingDocumentName("");
     setPendingDocumentKind("");
-    setPendingDocumentChooserKind("");
-  }
-
-  function renderPendingDocumentPicker(kind) {
-    const isOpen = pendingDocumentChooserKind === kind;
-    const hasDocument = pendingDocumentKind === kind && pendingDocumentFile;
-
-    return (
-      <div className="pending-document-section">
-        <button
-          className="document-button"
-          type="button"
-          onClick={() => setPendingDocumentChooserKind(isOpen ? "" : kind)}
-        >
-          Add Document
-        </button>
-
-        {isOpen && (
-          <div className="pending-document-panel">
-            <div className="document-source-buttons">
-              <label className="document-source-button">
-                Take Photo
-                <input
-                  className="document-file-input"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(event) => selectPendingDocument(event, kind)}
-                />
-              </label>
-              <label className="document-source-button">
-                Choose File
-                <input
-                  className="document-file-input"
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={(event) => selectPendingDocument(event, kind)}
-                />
-              </label>
-            </div>
-
-            {hasDocument && (
-              <div className="document-selected-file">
-                <span>Selected file:</span>
-                <strong>{pendingDocumentFile.name}</strong>
-                <label className="document-name-label">
-                  Document Name
-                  <input
-                    type="text"
-                    value={pendingDocumentName}
-                    onChange={(event) => setPendingDocumentName(event.target.value)}
-                    placeholder="Enter a name for this document"
-                  />
-                </label>
-                <div className="document-action-buttons">
-                  <button className="edit-button" type="button" onClick={() => viewPendingDocument(kind)}>View</button>
-                  <button className="delete-button" type="button" onClick={clearPendingDocument}>Remove</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
   }
 
   function selectPendingDocument(event, kind) {
@@ -926,6 +863,7 @@ function App() {
       id: row.id,
       testDate: row.test_date || "",
       labName: row.lab_name || "",
+      category: row.category || "",
     };
   }
 
@@ -2090,7 +2028,7 @@ function App() {
 
   function addLabResult() {
     clearPendingDocument();
-    setLabForm(emptyLabResult);
+    setLabForm({ ...emptyLabResult, category: selectedLabCategory || "" });
     setEditingLabId(null);
     setSelectedLabId(null);
     setShowLabForm(true);
@@ -2101,7 +2039,7 @@ function App() {
     if (!userId) return;
 
     if (!labForm.testDate || !labForm.labName) {
-      window.alert("Please enter the date of test and lab name.");
+      window.alert("Please enter the date and lab / procedure name.");
       return;
     }
 
@@ -2109,6 +2047,7 @@ function App() {
       user_id: userId,
       test_date: safeDate(labForm.testDate),
       lab_name: labForm.labName || null,
+      category: labForm.category || selectedLabCategory || null,
     };
 
     let query;
@@ -2121,7 +2060,7 @@ function App() {
     const { data: savedRows, error: databaseError } = await query.select("id");
     if (databaseError) {
       console.error("Could not save lab result:", databaseError);
-      window.alert("The lab result could not be saved.");
+      window.alert("The lab / procedure record could not be saved.");
       return;
     }
 
@@ -2138,7 +2077,7 @@ function App() {
     setLabForm(emptyLabResult);
     setEditingLabId(null);
     setShowLabForm(false);
-    setSaveMessage("Lab result saved");
+    setSaveMessage("Lab / procedure record saved");
     await loadLabResults(userId);
 
     if (addAnotherDocument && savedId) {
@@ -2147,7 +2086,34 @@ function App() {
     }
   }
 
+  async function moveLabResult(lab, destination) {
+    const destinationLabels = {
+      blood_work: "Blood Work",
+      radiology: "Radiology",
+      other: "Other",
+    };
+    const destinationLabel = destinationLabels[destination] || destination;
+    if (!window.confirm(`Move this record to ${destinationLabel}?`)) return;
+
+    const { error } = await supabase
+      .from("lab_results")
+      .update({ category: destination })
+      .eq("id", lab.id);
+
+    if (error) {
+      console.error("Could not move lab/procedure record:", error);
+      window.alert("The record could not be moved. Make sure the lab_results category database update has been applied.");
+      return;
+    }
+
+    setShowLabMoveChoices(false);
+    setSelectedLabId(null);
+    await loadLabResults(session?.user?.id);
+    setSaveMessage(`Record moved to ${destinationLabel}`);
+  }
+
   function editLabResult(lab) {
+    setShowLabMoveChoices(false);
     setLabForm({
       testDate: lab.testDate,
       labName: lab.labName,
@@ -2726,8 +2692,8 @@ function App() {
     const userId = session?.user?.id;
     if (!userId) return;
 
-    if (!noteForm.date || !noteForm.title.trim()) {
-      window.alert("Please enter a date and title.");
+    if (!noteForm.date || !noteForm.title.trim() || !noteForm.note.trim()) {
+      window.alert("Please enter a date, title, and note.");
       return;
     }
 
@@ -2903,7 +2869,7 @@ if (!session) {
       <main className="app">
         <div className="navigation-buttons">
           <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
-          <button className="home-button" onClick={goHome}>Home</button>
+          <button className="home-button" onClick={goHome}>Main Menu</button>
         </div>
 
         <h1>Personal Information</h1>
@@ -3090,7 +3056,7 @@ if (!session) {
         <main className="app">
           <div className="navigation-buttons">
             <button className="back-button" onClick={closeInsuranceDocument}>← Back</button>
-            <button className="home-button" onClick={goHome}>Home</button>
+            <button className="home-button" onClick={goHome}>Main Menu</button>
           </div>
 
           <h1>Saved Documents</h1>
@@ -3266,7 +3232,7 @@ if (!session) {
       <main className="app">
         <div className="navigation-buttons">
           <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
-          <button className="home-button" onClick={goHome}>Home</button>
+          <button className="home-button" onClick={goHome}>Main Menu</button>
         </div>
 
         <h1>Insurance Information</h1>
@@ -3408,8 +3374,6 @@ if (!session) {
               />
             </label>
 
-            {editingInsuranceIndex === null && renderPendingDocumentPicker("insurance")}
-
             <button className="save-button" onClick={saveInsurance}>
               Save Insurance
             </button>
@@ -3443,7 +3407,7 @@ if (!session) {
           >
             ← Back
           </button>
-          <button className="home-button" onClick={goHome}>Home</button>
+          <button className="home-button" onClick={goHome}>Main Menu</button>
         </div>
 
         <h1>Doctors</h1>
@@ -3552,8 +3516,6 @@ if (!session) {
               <input name="phoneNumber" value={doctorForm.phoneNumber} onChange={handleDoctorChange} />
             </label>
 
-            {editingDoctorIndex === null && renderPendingDocumentPicker("doctor")}
-
             <button className="save-button" onClick={saveDoctor}>Save Doctor</button>
             <button className="cancel-button" onClick={cancelDoctorEdit}>Cancel</button>
           </div>
@@ -3567,7 +3529,7 @@ if (!session) {
       <main className="app">
         <div className="navigation-buttons">
           <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
-          <button className="home-button" onClick={goHome}>Home</button>
+          <button className="home-button" onClick={goHome}>Main Menu</button>
         </div>
 
         <h1>Surgeries</h1>
@@ -3705,8 +3667,6 @@ if (!session) {
               />
             </label>
 
-            {editingSurgeryIndex === null && renderPendingDocumentPicker("surgery")}
-
             <button className="save-button" onClick={saveSurgery}>
               Save Surgery
             </button>
@@ -3720,7 +3680,7 @@ if (!session) {
     );
   }
 
-  if (activeSection?.name === "Lab Results") {
+  if (activeSection?.name === "Lab / Procedures") {
     if (showLabDocument) {
       const previewType = selectedLabDocument?.mimeType || "";
       const previewName = selectedLabDocument?.name || "";
@@ -3729,7 +3689,7 @@ if (!session) {
       if (labDocumentMode === "view" && labDocumentPreviewUrl) {
         return (
           <main className="app document-fullscreen-viewer">
-            <h1>Lab Document</h1>
+            <h1>Lab / Procedure Document</h1>
             <p className="document-policy-name">
               {selectedLabDocument?.displayName || selectedLabDocument?.name || "Document"}
             </p>
@@ -3757,10 +3717,10 @@ if (!session) {
         <main className="app">
           <div className="navigation-buttons">
           <button className="back-button" type="button" onClick={closeLabDocument}>← Back</button>
-          <button className="home-button" type="button" onClick={goHome}>Home</button>
+          <button className="home-button" type="button" onClick={goHome}>Main Menu</button>
         </div>
           <h1>Saved Documents</h1>
-          <p className="document-policy-name">{documentLab?.labName || "Lab Result"}</p>
+          <p className="document-policy-name">{documentLab?.labName || "Lab / Procedure Record"}</p>
 
           <div className="form-card document-card">
             {!selectedLabDocument && labDocumentMode !== "edit" && (savedLabDocuments.length === 0 || addingNewLabDocument) && (
@@ -3837,119 +3797,124 @@ if (!session) {
   return (
     <main className="app">
       <div className="navigation-buttons">
-        <button className="back-button" type="button" onClick={() => setActiveSection(null)}>← Back</button>
-        <button className="home-button" type="button" onClick={goHome}>Home</button>
+        <button className="back-button" type="button" onClick={() => {
+          if (selectedLabCategory && !showLabForm && selectedLabId === null) {
+            setSelectedLabCategory("");
+          } else {
+            setActiveSection(null);
+          }
+        }}>← Back</button>
+        <button className="home-button" type="button" onClick={goHome}>Main Menu</button>
       </div>
 
-      <h1>Lab Results</h1>
+      <h1>Lab / Procedures</h1>
 
       {!showLabForm && selectedLabId === null && (
-        <button
-          className="add-button labs-add-button"
-          type="button"
-          onClick={addLabResult}
-        >
-          + Add Lab Result
-        </button>
-      )}
+        <>
+          {!selectedLabCategory && (
+            <div className="appointment-menu">
+              <button className="add-button" type="button" onClick={() => setSelectedLabCategory("blood_work")}>Blood Work</button>
+              <button className="edit-button" type="button" onClick={() => setSelectedLabCategory("radiology")}>Radiology</button>
+              <button className="document-button" type="button" onClick={() => setSelectedLabCategory("other")}>Other</button>
+            </div>
+          )}
 
-      {!showLabForm && selectedLabId === null && labResults.length === 0 && (
-        <div className="empty-message">
-          No lab results have been added yet.
-        </div>
+
+          <h2>
+            {selectedLabCategory === "blood_work" ? "Blood Work" :
+             selectedLabCategory === "radiology" ? "Radiology" :
+             selectedLabCategory === "other" ? "Other" : "Current Lab / Procedure Records"}
+          </h2>
+
+          <button className="add-button labs-add-button" type="button" onClick={addLabResult}>
+            + Add Record
+          </button>
+        </>
       )}
 
       {!showLabForm && selectedLabId === null &&
-        labResults.map((lab) => (
-          <div
-            className="lab-card clickable"
-            key={lab.id}
-            onClick={() => setSelectedLabId(lab.id)}
-          >
-            <h2>{lab.labName}</h2>
-            <p><strong>Date of Test:</strong> {lab.testDate}</p>
+        labResults.filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : !lab.category)).length === 0 && (
+          <div className="empty-message">
+            {selectedLabCategory ? "No records have been added to this category yet." : "No uncategorized lab/procedure records."}
           </div>
-        ))}
+        )}
+
+      {!showLabForm && selectedLabId === null &&
+        labResults
+          .filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : !lab.category))
+          .map((lab) => (
+            <div className="lab-card clickable" key={lab.id} onClick={() => { setSelectedLabId(lab.id); setShowLabMoveChoices(false); }}>
+              <h2>{lab.labName}</h2>
+              <p><strong>Date of Test:</strong> {lab.testDate}</p>
+            </div>
+          ))}
 
       {!showLabForm && selectedLabId !== null && (() => {
         const lab = labResults.find((item) => item.id === selectedLabId);
         if (!lab) return null;
         return (
           <div className="lab-card lab-detail-card">
-            <button type="button" className="back-button" onClick={() => setSelectedLabId(null)}>
-              ← Lab Results
+            <button type="button" className="back-button" onClick={() => { setSelectedLabId(null); setShowLabMoveChoices(false); }}>
+              ← {selectedLabCategory === "blood_work" ? "Blood Work" : selectedLabCategory === "radiology" ? "Radiology" : selectedLabCategory === "other" ? "Other" : "Lab / Procedures"}
             </button>
             <h2>{lab.labName}</h2>
             <p><strong>Date of Test:</strong> {lab.testDate}</p>
 
-            <button className="document-button" type="button" onClick={() => openLabDocument(lab)}>
-              Review Documents
-            </button>
-
-            <div className="card-actions">
-              <button className="edit-button" type="button" onClick={() => editLabResult(lab)}>
-                Edit
+            <div className="lab-record-actions">
+              <button className="document-button" type="button" onClick={() => openLabDocument(lab)}>
+                Review Documents
+              </button>
+              <button className="save-button" type="button" onClick={() => setShowLabMoveChoices((current) => !current)}>
+                Move
               </button>
               <button className="delete-button" type="button" onClick={() => deleteLabResult(lab.id)}>
                 Delete
               </button>
             </div>
+
+            {showLabMoveChoices && (
+              <div className="form-card">
+                <h3>Move this record to:</h3>
+                <div className="document-action-buttons">
+                  <button className="add-button" type="button" onClick={() => moveLabResult(lab, "blood_work")}>Blood Work</button>
+                  <button className="edit-button" type="button" onClick={() => moveLabResult(lab, "radiology")}>Radiology</button>
+                  <button className="document-button" type="button" onClick={() => moveLabResult(lab, "other")}>Other</button>
+                  <button className="cancel-button" type="button" onClick={() => setShowLabMoveChoices(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
 
       {showLabForm && (
         <div className="form-card">
+          <h2>
+            {selectedLabCategory === "blood_work" ? "New Blood Work Record" :
+             selectedLabCategory === "radiology" ? "New Radiology Record" :
+             selectedLabCategory === "other" ? "New Other Record" : "New Lab / Procedure Record"}
+          </h2>
           <label>
             Date of Test
-            <input
-              name="testDate"
-              value={labForm.testDate}
-              onChange={handleLabChange}
-              type="date"
-            />
+            <input name="testDate" value={labForm.testDate} onChange={handleLabChange} type="date" />
           </label>
 
           <label>
-            Lab Name
-            <input
-              name="labName"
-              value={labForm.labName}
-              onChange={handleLabChange}
-              type="text"
-            />
+            Lab / Procedure Name
+            <input name="labName" value={labForm.labName} onChange={handleLabChange} type="text" />
           </label>
 
           {editingLabId && (
-            <button
-              className="document-button"
-              type="button"
-              onClick={() => {
-                const lab = labResults.find((item) => item.id === editingLabId);
-                if (lab) openLabDocument(lab);
-              }}
-            >
+            <button className="document-button" type="button" onClick={() => {
+              const lab = labResults.find((item) => item.id === editingLabId);
+              if (lab) openLabDocument(lab);
+            }}>
               Review Documents
             </button>
           )}
 
-          {!editingLabId && renderPendingDocumentPicker("lab")}
-
-          <button
-            className="save-button"
-            type="button"
-            onClick={saveLabResult}
-          >
-            Save Lab Result
-          </button>
-
-          <button
-            className="cancel-button"
-            type="button"
-            onClick={cancelLabEdit}
-          >
-            Cancel
-          </button>
+          <button className="save-button" type="button" onClick={saveLabResult}>Save Record</button>
+          <button className="cancel-button" type="button" onClick={cancelLabEdit}>Cancel</button>
         </div>
       )}
 
@@ -4028,13 +3993,12 @@ if (activeSection?.name === "Appointments") {
       <main className="app">
         <div className="navigation-buttons">
           <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
-          <button className="home-button" onClick={goHome}>Home</button>
+          <button className="home-button" onClick={goHome}>Main Menu</button>
         </div>
         <h1>Appointments</h1>
         <div className="appointment-menu">
           <button className="appointment-menu-button appointment-new" onClick={() => {
             closeSelectedAppointment();
-            clearPendingDocument();
             setAppointmentView("new");
           }}>New Appointment</button>
           <button className="appointment-menu-button appointment-upcoming" onClick={() => {
@@ -4055,7 +4019,7 @@ if (activeSection?.name === "Appointments") {
       <main className="app">
         <div className="navigation-buttons">
           <button className="back-button" onClick={() => { closeSelectedAppointment(); setAppointmentView("menu"); }}>← Back</button>
-          <button className="home-button" onClick={goHome}>Home</button>
+          <button className="home-button" onClick={goHome}>Main Menu</button>
         </div>
         <h1>{editingAppointmentIndex !== null ? "Edit Appointment" : "New Appointment"}</h1>
         <div className="form-grid">
@@ -4074,8 +4038,6 @@ if (activeSection?.name === "Appointments") {
           <label>Notes</label>
           <textarea rows="4" value={appointmentForm.notes} onChange={(e) => setAppointmentForm({ ...appointmentForm, notes: e.target.value })} />
         </div>
-        {editingAppointmentIndex === null && renderPendingDocumentPicker("appointment")}
-
         <button onClick={saveAppointment}>
           {editingAppointmentIndex !== null ? "Update Appointment" : "Add Appointment"}
         </button>
@@ -4088,7 +4050,7 @@ if (activeSection?.name === "Appointments") {
     <main className="app">
       <div className="navigation-buttons">
         <button className="back-button" onClick={() => { closeSelectedAppointment(); setAppointmentView("menu"); }}>← Back</button>
-        <button className="home-button" onClick={goHome}>Home</button>
+        <button className="home-button" onClick={goHome}>Main Menu</button>
       </div>
       <h1>{appointmentView === "upcoming" ? "Upcoming Appointments" : "Past Appointments"}</h1>
       {appointmentView === "upcoming"
@@ -4134,7 +4096,7 @@ if (activeSection?.name === "Miscellaneous Info") {
       <main className="app">
         <div className="navigation-buttons">
           <button className="back-button" type="button" onClick={closeNoteDocument}>← Back</button>
-          <button className="home-button" type="button" onClick={goHome}>Home</button>
+          <button className="home-button" type="button" onClick={goHome}>Main Menu</button>
         </div>
         <h1>Saved Documents</h1>
         <p className="document-policy-name">{documentNote?.title || "Note"}</p>
@@ -4226,7 +4188,7 @@ if (activeSection?.name === "Miscellaneous Info") {
     <main className="app">
       <div className="navigation-buttons">
         <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
-        <button className="home-button" onClick={goHome}>Home</button>
+        <button className="home-button" onClick={goHome}>Main Menu</button>
       </div>
 
       <h1>Miscellaneous Info</h1>
@@ -4333,7 +4295,7 @@ if (activeSection?.name === "Miscellaneous Info") {
           </label>
 
           <label>
-            Note (Optional)
+            Note
             <textarea
               name="note"
               value={noteForm.note}
@@ -4342,8 +4304,6 @@ if (activeSection?.name === "Miscellaneous Info") {
               placeholder="Enter your note here"
             />
           </label>
-          {editingNoteIndex === null && renderPendingDocumentPicker("note")}
-
           <button className="save-button" type="button" onClick={saveNote}>
             {editingNoteIndex !== null ? "Update Note" : "Save Note"}
           </button>
@@ -4365,7 +4325,7 @@ return (
       <main className="app">
         <div className="navigation-buttons">
           <button className="back-button" onClick={() => setActiveSection(null)}>← Back</button>
-          <button className="home-button" onClick={goHome}>Home</button>
+          <button className="home-button" onClick={goHome}>Main Menu</button>
         </div>
 
         <h1>{activeSection.name}</h1>
