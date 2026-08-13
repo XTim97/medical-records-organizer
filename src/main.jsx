@@ -670,7 +670,7 @@ function App() {
     window.setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
-  async function uploadPendingDocument(userId, kind, recordId, bucket, folder) {
+  async function uploadPendingDocument(userId, kind, recordId, bucket, folder, askAddAnother = true) {
     if (!pendingDocumentFile || pendingDocumentKind !== kind || !recordId) return false;
 
     const trimmedName = (pendingDocumentName || "document").trim() || "document";
@@ -697,6 +697,7 @@ function App() {
     }
 
     clearPendingDocument();
+    if (!askAddAnother) return false;
     return window.confirm("Document saved successfully. Do you want to add another document?");
   }
 
@@ -2065,10 +2066,11 @@ function App() {
     }
 
     const savedId = editingLabId || savedRows?.[0]?.id;
+    const hadPendingLabDocument = pendingDocumentFile && pendingDocumentKind === "lab";
     let addAnotherDocument = false;
     if (savedId) {
       addAnotherDocument = await uploadPendingDocument(
-        userId, "lab", savedId, "lab-documents", `${userId}/${savedId}`
+        userId, "lab", savedId, "lab-documents", `${userId}/${savedId}`, false
       );
     }
 
@@ -2077,6 +2079,7 @@ function App() {
     setLabForm(emptyLabResult);
     setEditingLabId(null);
     setShowLabForm(false);
+    if (hadPendingLabDocument) setSelectedLabCategory("");
     setSaveMessage("Lab / procedure record saved");
     await loadLabResults(userId);
 
@@ -3907,6 +3910,43 @@ if (!session) {
             Lab / Procedure Name
             <input name="labName" value={labForm.labName} onChange={handleLabChange} type="text" />
           </label>
+
+          {!editingLabId && (
+            <>
+              <label className="document-source-button">
+                Add Document
+                <input
+                  className="document-file-input"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(event) => selectPendingDocument(event, "lab")}
+                />
+              </label>
+
+              {pendingDocumentFile && pendingDocumentKind === "lab" && (
+                <div className="document-selected-file">
+                  <span>Selected file:</span>
+                  <strong>{pendingDocumentFile.name}</strong>
+                  <label className="document-name-label">
+                    Document Name
+                    <input
+                      type="text"
+                      value={pendingDocumentName}
+                      onChange={(event) => setPendingDocumentName(event.target.value)}
+                      placeholder="Enter a name for this document"
+                    />
+                  </label>
+                  <button
+                    className="edit-button"
+                    type="button"
+                    onClick={() => viewPendingDocument("lab")}
+                  >
+                    View Document
+                  </button>
+                </div>
+              )}
+            </>
+          )}
 
           {editingLabId && (
             <button className="document-button" type="button" onClick={() => {
