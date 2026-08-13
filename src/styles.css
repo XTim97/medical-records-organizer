@@ -524,3 +524,56 @@
     min-width: 135px;
   }
 }
+
+
+/* Lab / Procedures category choices: equal-size buttons */
+.lab-category-menu {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0 24px;
+}
+
+.lab-category-menu .lab-category-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  margin: 0;
+  padding: 14px 18px;
+  box-sizing: border-box;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+/* Move screen: show only equal-size destination buttons plus Cancel */
+.lab-move-screen {
+  width: 100%;
+}
+
+.lab-move-screen h2 {
+  margin-bottom: 18px;
+}
+
+.lab-move-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.lab-move-buttons .lab-move-button {
+  width: 100%;
+  min-width: 100%;
+  min-height: 54px;
+  margin: 0;
+  padding: 12px 18px;
+  box-sizing: border-box;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+@media (max-width: 700px) {
+  .lab-category-menu {
+    grid-template-columns: 1fr;
+  }
+}

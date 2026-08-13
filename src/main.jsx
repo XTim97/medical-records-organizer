@@ -3798,7 +3798,12 @@ if (!session) {
     <main className="app">
       <div className="navigation-buttons">
         <button className="back-button" type="button" onClick={() => {
-          if (selectedLabCategory && !showLabForm && selectedLabId === null) {
+          if (showLabMoveChoices && selectedLabId !== null) {
+            setShowLabMoveChoices(false);
+          } else if (selectedLabId !== null) {
+            setSelectedLabId(null);
+            setShowLabMoveChoices(false);
+          } else if (selectedLabCategory && !showLabForm) {
             setSelectedLabCategory("");
           } else {
             setActiveSection(null);
@@ -3812,10 +3817,10 @@ if (!session) {
       {!showLabForm && selectedLabId === null && (
         <>
           {!selectedLabCategory && (
-            <div className="appointment-menu">
-              <button className="add-button" type="button" onClick={() => setSelectedLabCategory("blood_work")}>Blood Work</button>
-              <button className="edit-button" type="button" onClick={() => setSelectedLabCategory("radiology")}>Radiology</button>
-              <button className="document-button" type="button" onClick={() => setSelectedLabCategory("other")}>Other</button>
+            <div className="lab-category-menu">
+              <button className="lab-category-button add-button" type="button" onClick={() => setSelectedLabCategory("blood_work")}>Blood Work</button>
+              <button className="lab-category-button edit-button" type="button" onClick={() => setSelectedLabCategory("radiology")}>Radiology</button>
+              <button className="lab-category-button document-button" type="button" onClick={() => setSelectedLabCategory("other")}>Other</button>
             </div>
           )}
 
@@ -3854,34 +3859,33 @@ if (!session) {
         if (!lab) return null;
         return (
           <div className="lab-card lab-detail-card">
-            <button type="button" className="back-button" onClick={() => { setSelectedLabId(null); setShowLabMoveChoices(false); }}>
-              ← {selectedLabCategory === "blood_work" ? "Blood Work" : selectedLabCategory === "radiology" ? "Radiology" : selectedLabCategory === "other" ? "Other" : "Lab / Procedures"}
-            </button>
-            <h2>{lab.labName}</h2>
-            <p><strong>Date of Test:</strong> {lab.testDate}</p>
-
-            <div className="lab-record-actions">
-              <button className="document-button" type="button" onClick={() => openLabDocument(lab)}>
-                Review Documents
-              </button>
-              <button className="save-button" type="button" onClick={() => setShowLabMoveChoices((current) => !current)}>
-                Move
-              </button>
-              <button className="delete-button" type="button" onClick={() => deleteLabResult(lab.id)}>
-                Delete
-              </button>
-            </div>
-
-            {showLabMoveChoices && (
-              <div className="form-card">
-                <h3>Move this record to:</h3>
-                <div className="document-action-buttons">
-                  <button className="add-button" type="button" onClick={() => moveLabResult(lab, "blood_work")}>Blood Work</button>
-                  <button className="edit-button" type="button" onClick={() => moveLabResult(lab, "radiology")}>Radiology</button>
-                  <button className="document-button" type="button" onClick={() => moveLabResult(lab, "other")}>Other</button>
-                  <button className="cancel-button" type="button" onClick={() => setShowLabMoveChoices(false)}>Cancel</button>
+            {showLabMoveChoices ? (
+              <div className="lab-move-screen">
+                <h2>Where do you want to move this record?</h2>
+                <div className="lab-move-buttons">
+                  <button className="lab-move-button add-button" type="button" onClick={() => moveLabResult(lab, "blood_work")}>Blood Work</button>
+                  <button className="lab-move-button edit-button" type="button" onClick={() => moveLabResult(lab, "radiology")}>Radiology</button>
+                  <button className="lab-move-button document-button" type="button" onClick={() => moveLabResult(lab, "other")}>Other</button>
+                  <button className="lab-move-button cancel-button" type="button" onClick={() => setShowLabMoveChoices(false)}>Cancel</button>
                 </div>
               </div>
+            ) : (
+              <>
+                <h2>{lab.labName}</h2>
+                <p><strong>Date of Test:</strong> {lab.testDate}</p>
+
+                <div className="lab-record-actions">
+                  <button className="document-button" type="button" onClick={() => openLabDocument(lab)}>
+                    Review Documents
+                  </button>
+                  <button className="save-button" type="button" onClick={() => setShowLabMoveChoices(true)}>
+                    Move
+                  </button>
+                  <button className="delete-button" type="button" onClick={() => deleteLabResult(lab.id)}>
+                    Delete
+                  </button>
+                </div>
+              </>
             )}
           </div>
         );
