@@ -3951,6 +3951,9 @@ if (!session) {
                   <button className="document-button" type="button" onClick={() => openLabDocument(lab)}>
                     Review Documents
                   </button>
+                  <button className="edit-button" type="button" onClick={() => editLabResult(lab)}>
+                    Edit
+                  </button>
                   <button className="save-button" type="button" onClick={() => setShowLabMoveChoices(true)}>
                     Move
                   </button>
@@ -3967,7 +3970,8 @@ if (!session) {
       {showLabForm && (
         <div className="form-card">
           <h2>
-            {selectedLabCategory === "blood_work" ? "New Blood Work Record" :
+            {editingLabId ? "Edit Lab / Procedure Record" :
+             selectedLabCategory === "blood_work" ? "New Blood Work Record" :
              selectedLabCategory === "radiology" ? "New Radiology Record" :
              selectedLabCategory === "other" ? "New Other Record" : "New Lab / Procedure Record"}
           </h2>
