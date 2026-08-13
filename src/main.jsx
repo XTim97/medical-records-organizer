@@ -3912,15 +3912,15 @@ if (!session) {
       )}
 
       {!showLabForm && selectedLabId === null &&
-        labResults.filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : true)).length === 0 && (
+        labResults.filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : !lab.category)).length === 0 && (
           <div className="empty-message">
-            {selectedLabCategory ? "No records have been added to this category yet." : "No lab / procedure records have been added yet."}
+            {selectedLabCategory ? "No records have been added to this category yet." : "No uncategorized lab / procedure records."}
           </div>
         )}
 
       {!showLabForm && selectedLabId === null &&
         labResults
-          .filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : true))
+          .filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : !lab.category))
           .map((lab) => (
             <div className="lab-card clickable" key={lab.id} onClick={() => { setSelectedLabId(lab.id); setShowLabMoveChoices(false); }}>
               <h2>{lab.labName}</h2>
