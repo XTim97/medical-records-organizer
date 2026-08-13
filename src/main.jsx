@@ -609,6 +609,7 @@ function App() {
   const [addingNewLabDocument, setAddingNewLabDocument] = useState(false);
   const [selectedLabCategory, setSelectedLabCategory] = useState("");
   const [showLabMoveChoices, setShowLabMoveChoices] = useState(false);
+  const [showLabSaveChoices, setShowLabSaveChoices] = useState(false);
 
   const [notes, setNotes] = useState(() => {
     const saved = localStorage.getItem("medicalRecordsNotes");
@@ -2107,9 +2108,10 @@ function App() {
     setEditingLabId(null);
     setSelectedLabId(null);
     setShowLabForm(true);
+    setShowLabSaveChoices(false);
   }
 
-  async function saveLabResult() {
+  async function saveLabResult(destinationCategory) {
     const userId = session?.user?.id;
     if (!userId) return;
 
@@ -2122,7 +2124,7 @@ function App() {
       user_id: userId,
       test_date: normalizeLabDateForStorage(labForm.testDate),
       lab_name: labForm.labName || null,
-      category: labForm.category || selectedLabCategory || null,
+      category: destinationCategory || labForm.category || selectedLabCategory || null,
     };
 
     let query;
@@ -2140,27 +2142,20 @@ function App() {
     }
 
     const savedId = editingLabId || savedRows?.[0]?.id;
-    const hadPendingLabDocument = pendingDocumentFile && pendingDocumentKind === "lab";
-    let addAnotherDocument = false;
     if (savedId) {
-      addAnotherDocument = await uploadPendingDocument(
+      await uploadPendingDocument(
         userId, "lab", savedId, "lab-documents", `${userId}/${savedId}`, false
       );
     }
 
-    const savedLab = { ...labForm, id: savedId };
-
     setLabForm(emptyLabResult);
     setEditingLabId(null);
     setShowLabForm(false);
-    if (hadPendingLabDocument) setSelectedLabCategory("");
+    setShowLabSaveChoices(false);
+    setSelectedLabId(null);
+    setSelectedLabCategory("");
     setSaveMessage("Lab / procedure record saved");
     await loadLabResults(userId);
-
-    if (addAnotherDocument && savedId) {
-      await openLabDocument(savedLab);
-      setSelectedLabDocument(null);
-    }
   }
 
   async function moveLabResult(lab, destination) {
@@ -2222,6 +2217,7 @@ function App() {
     setEditingLabId(null);
     setSelectedLabId(null);
     setShowLabForm(false);
+    setShowLabSaveChoices(false);
   }
 
 
@@ -3987,15 +3983,17 @@ if (!session) {
 
           {!editingLabId && (
             <>
-              <label className="document-source-button">
-                Add Document
-                <input
-                  className="document-file-input"
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={(event) => selectPendingDocument(event, "lab")}
-                />
-              </label>
+              {!(pendingDocumentFile && pendingDocumentKind === "lab") && (
+                <label className="document-source-button">
+                  Add Document
+                  <input
+                    className="document-file-input"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(event) => selectPendingDocument(event, "lab")}
+                  />
+                </label>
+              )}
 
               {pendingDocumentFile && pendingDocumentKind === "lab" && (
                 <div className="document-selected-file">
@@ -4031,8 +4029,36 @@ if (!session) {
             </button>
           )}
 
-          <button className="save-button" type="button" onClick={saveLabResult}>Save Record</button>
-          <button className="cancel-button" type="button" onClick={cancelLabEdit}>Cancel</button>
+          {!editingLabId && showLabSaveChoices ? (
+            <div className="lab-move-screen">
+              <h2>Where do you want to save this record?</h2>
+              <div className="lab-move-buttons">
+                <button className="lab-move-button add-button" type="button" onClick={() => saveLabResult("blood_work")}>Blood Work</button>
+                <button className="lab-move-button edit-button" type="button" onClick={() => saveLabResult("radiology")}>Radiology</button>
+                <button className="lab-move-button document-button" type="button" onClick={() => saveLabResult("other")}>Other</button>
+                <button className="lab-move-button cancel-button" type="button" onClick={() => setShowLabSaveChoices(false)}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button
+              className="save-button"
+              type="button"
+              onClick={() => {
+                if (editingLabId) {
+                  saveLabResult();
+                } else {
+                  if (!labForm.testDate || !labForm.labName) {
+                    window.alert("Please enter the date and lab / procedure name.");
+                    return;
+                  }
+                  setShowLabSaveChoices(true);
+                }
+              }}
+            >
+              Save Record
+            </button>
+          )}
+          {!showLabSaveChoices && <button className="cancel-button" type="button" onClick={cancelLabEdit}>Cancel</button>}
         </div>
       )}
 
