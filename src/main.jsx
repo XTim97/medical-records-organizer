@@ -2189,6 +2189,7 @@ function App() {
     setLabForm({
       testDate: lab.testDate,
       labName: lab.labName,
+      category: lab.category || "",
     });
     setEditingLabId(lab.id);
     setSelectedLabId(null);
@@ -3911,19 +3912,26 @@ if (!session) {
       )}
 
       {!showLabForm && selectedLabId === null &&
-        labResults.filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : !lab.category)).length === 0 && (
+        labResults.filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : true)).length === 0 && (
           <div className="empty-message">
-            {selectedLabCategory ? "No records have been added to this category yet." : "No uncategorized lab/procedure records."}
+            {selectedLabCategory ? "No records have been added to this category yet." : "No lab / procedure records have been added yet."}
           </div>
         )}
 
       {!showLabForm && selectedLabId === null &&
         labResults
-          .filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : !lab.category))
+          .filter((lab) => (selectedLabCategory ? lab.category === selectedLabCategory : true))
           .map((lab) => (
             <div className="lab-card clickable" key={lab.id} onClick={() => { setSelectedLabId(lab.id); setShowLabMoveChoices(false); }}>
               <h2>{lab.labName}</h2>
               <p><strong>Date of Test:</strong> {lab.testDate}</p>
+              {!selectedLabCategory && (
+                <p><strong>Category:</strong> {
+                  lab.category === "blood_work" ? "Blood Work" :
+                  lab.category === "radiology" ? "Radiology" :
+                  lab.category === "other" ? "Other" : "Uncategorized"
+                }</p>
+              )}
             </div>
           ))}
 
