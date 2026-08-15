@@ -686,10 +686,19 @@ function App() {
     let name = baseName;
     let date = "";
 
+    // Support the existing YYYY-MM-DD filename format.
     const exactDate = baseName.match(/^(.*?)[\s_-]+(\d{4})[-_](\d{1,2})[-_](\d{1,2})$/);
     if (exactDate) {
       name = exactDate[1].trim();
       date = `${exactDate[2]}-${String(exactDate[3]).padStart(2, "0")}-${String(exactDate[4]).padStart(2, "0")}`;
+      return { name, date };
+    }
+
+    // Also support the common MM-DD-YYYY / MM_DD_YYYY / MM/DD/YYYY format.
+    const monthDayYear = baseName.match(/^(.*?)[\s_-]+(\d{1,2})[-_\/](\d{1,2})[-_\/](\d{4})$/);
+    if (monthDayYear) {
+      name = monthDayYear[1].trim();
+      date = `${monthDayYear[4]}-${String(monthDayYear[2]).padStart(2, "0")}-${String(monthDayYear[3]).padStart(2, "0")}`;
       return { name, date };
     }
 
