@@ -733,6 +733,18 @@ function App() {
         testDate: parsed.date || current.testDate,
       }));
     }
+
+    if (kind === "note") {
+      const parsed = parseLabDocumentFilename(originalName);
+      const parsedDate = parsed.date
+        ? (/^\d{4}-\d{2}$/.test(parsed.date) ? `${parsed.date}-01` : parsed.date)
+        : "";
+      setNoteForm((current) => ({
+        ...current,
+        title: parsed.name || current.title,
+        date: parsedDate || current.date,
+      }));
+    }
   }
 
   function viewPendingDocument(kind) {
@@ -2566,6 +2578,19 @@ function App() {
     setNoteDocumentFile(file);
     const originalName = file.name || "document"; const lastDot = originalName.lastIndexOf(".");
     setNoteDocumentName(lastDot > 0 ? originalName.slice(0, lastDot) : originalName);
+
+    // Match the Lab / Procedures behavior: use the filename to pre-fill
+    // the Miscellaneous Info note title and date.
+    const parsed = parseLabDocumentFilename(originalName);
+    const parsedDate = parsed.date
+      ? (/^\d{4}-\d{2}$/.test(parsed.date) ? `${parsed.date}-01` : parsed.date)
+      : "";
+    setNoteForm((current) => ({
+      ...current,
+      title: parsed.name || current.title,
+      date: parsedDate || current.date,
+    }));
+
     setSelectedNoteDocument(null); setNoteDocumentPreviewUrl("");
     setAddingNewNoteDocument(true);
   }
@@ -2766,8 +2791,8 @@ function App() {
     const userId = session?.user?.id;
     if (!userId) return;
 
-    if (!noteForm.date || !noteForm.title.trim() || !noteForm.note.trim()) {
-      window.alert("Please enter a date, title, and note.");
+    if (!noteForm.date || !noteForm.title.trim() || (!noteForm.note.trim() && !(pendingDocumentFile && pendingDocumentKind === "note"))) {
+      window.alert("Please enter a date and title, and either a note or a document.");
       return;
     }
 
@@ -4457,9 +4482,49 @@ if (activeSection?.name === "Miscellaneous Info") {
               value={noteForm.note}
               onChange={handleNoteChange}
               rows="8"
-              placeholder="Enter your note here"
+              placeholder="Enter your note here (optional when adding a document)"
             />
           </label>
+
+          {!editingNoteIndex && (
+            <>
+              {!(pendingDocumentFile && pendingDocumentKind === "note") && (
+                <label className="document-source-button">
+                  Add Document
+                  <input
+                    className="document-file-input"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(event) => selectPendingDocument(event, "note")}
+                  />
+                </label>
+              )}
+
+              {pendingDocumentFile && pendingDocumentKind === "note" && (
+                <div className="document-selected-file">
+                  <span>Selected file:</span>
+                  <strong>{pendingDocumentFile.name}</strong>
+                  <label className="document-name-label">
+                    Document Name
+                    <input
+                      type="text"
+                      value={pendingDocumentName}
+                      onChange={(event) => setPendingDocumentName(event.target.value)}
+                      placeholder="Enter a name for this document"
+                    />
+                  </label>
+                  <button
+                    className="edit-button"
+                    type="button"
+                    onClick={() => viewPendingDocument("note")}
+                  >
+                    View Document
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
           <button className="save-button" type="button" onClick={saveNote}>
             {editingNoteIndex !== null ? "Update Note" : "Save Note"}
           </button>
