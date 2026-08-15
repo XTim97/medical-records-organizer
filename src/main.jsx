@@ -671,9 +671,11 @@ function App() {
   function parseLabDocumentFilename(fileName) {
     const originalName = fileName || "";
     const lastDot = originalName.lastIndexOf(".");
-    const baseName = (lastDot > 0 ? originalName.slice(0, lastDot) : originalName)
-      .replace(/[_]+/g, " ")
-      .replace(/\s+/g, " ")
+    const rawBaseName = (lastDot > 0 ? originalName.slice(0, lastDot) : originalName).trim();
+    const cleanName = (value) => String(value || "")
+      .replace(/[._-]+$/g, "")
+      .replace(/[_]+/g, " " )
+      .replace(/\s+/g, " " )
       .trim();
 
     const months = {
@@ -683,35 +685,94 @@ function App() {
       nov: "11", november: "11", dec: "12", december: "12",
     };
 
-    let name = baseName;
-    let date = "";
-
-    // Support the existing YYYY-MM-DD filename format.
-    const exactDate = baseName.match(/^(.*?)[\s_-]+(\d{4})[-_](\d{1,2})[-_](\d{1,2})$/);
-    if (exactDate) {
-      name = exactDate[1].trim();
-      date = `${exactDate[2]}-${String(exactDate[3]).padStart(2, "0")}-${String(exactDate[4]).padStart(2, "0")}`;
-      return { name, date };
-    }
-
-    // Also support the common MM-DD-YYYY / MM_DD_YYYY / MM/DD/YYYY format.
-    const monthDayYear = baseName.match(/^(.*?)[\s_-]+(\d{1,2})[-_\/](\d{1,2})[-_\/](\d{4})$/);
-    if (monthDayYear) {
-      name = monthDayYear[1].trim();
-      date = `${monthDayYear[4]}-${String(monthDayYear[2]).padStart(2, "0")}-${String(monthDayYear[3]).padStart(2, "0")}`;
-      return { name, date };
-    }
-
-    const monthYear = baseName.match(/^(.*?)[\s_-]+([A-Za-z]+)\s+(\d{4})$/);
-    if (monthYear) {
-      const month = months[monthYear[2].toLowerCase()];
-      if (month) {
-        name = monthYear[1].trim();
-        date = `${monthYear[3]}-${month}`;
+    const monthPattern = "Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?";
+    const toFourDigitYear = (value) => {
+      const year = Number(value);
+      if (String(value).length === 4) return String(year);
+      return String(year >= 70 ? 1900 + year : 2000 + year);
+    };
+    const validDate = (year, month, day) => {
+      const y = Number(year);
+      const m = Number(month);
+      const d = Number(day);
+      if (!y || m < 1 || m > 12 || d < 1 || d > 31) return false;
+      const test = new Date(y, m - 1, d);
+      return test.getFullYear() === y && test.getMonth() === m - 1 && test.getDate() === d;
+    };
+    const finish = (match, year, month, day = null) => {
+      const y = toFourDigitYear(year);
+      const m = String(month).padStart(2, "0");
+      if (day !== null) {
+        const d = String(day).padStart(2, "0");
+        if (!validDate(y, m, d)) return null;
+        return { name: cleanName(rawBaseName.slice(0, match.index)), date: `${y}-${m}-${d}` };
       }
+      if (Number(m) < 1 || Number(m) > 12) return null;
+      return { name: cleanName(rawBaseName.slice(0, match.index)), date: `${y}-${m}` };
+    };
+
+    let match;
+
+    // YYYY-MM-DD, YYYY_MM_DD, YYYY.MM.DD, or YYYY/MM/DD.
+    match = rawBaseName.match(/(?:^|[\s_-])(\d{4})[-_.\/](\d{1,2})[-_.\/](\d{1,2})$/);
+    if (match) {
+      const parsed = finish(match, match[1], match[2], match[3]);
+      if (parsed) return parsed;
     }
 
-    return { name, date };
+    // MM-DD-YYYY, MM_DD_YYYY, MM.DD.YYYY, MM/DD/YYYY, including 2-digit years.
+    match = rawBaseName.match(/(?:^|[\s_-])(\d{1,2})[-_.\/](\d{1,2})[-_.\/](\d{2}|\d{4})$/);
+    if (match) {
+      const parsed = finish(match, match[3], match[1], match[2]);
+      if (parsed) return parsed;
+    }
+
+    // Compact YYYYMMDD.
+    match = rawBaseName.match(/(?:^|[\s_-])(\d{4})(\d{2})(\d{2})$/);
+    if (match) {
+      const parsed = finish(match, match[1], match[2], match[3]);
+      if (parsed) return parsed;
+    }
+
+    // Compact MMDDYYYY.
+    match = rawBaseName.match(/(?:^|[\s_-])(\d{2})(\d{2})(\d{4})$/);
+    if (match) {
+      const parsed = finish(match, match[3], match[1], match[2]);
+      if (parsed) return parsed;
+    }
+
+    // August 15 2026, Aug-15-2026, Aug.15.2026, etc.
+    match = rawBaseName.match(new RegExp(`(?:^|[\\s_-])(${monthPattern})[\\s._/-]+(\\d{1,2})(?:st|nd|rd|th)?[,]?[\\s._/-]+(\\d{2}|\\d{4})$`, "i"));
+    if (match) {
+      const month = months[match[1].toLowerCase()];
+      const parsed = month ? finish(match, match[3], month, match[2]) : null;
+      if (parsed) return parsed;
+    }
+
+    // 15 August 2026 or 15-Aug-2026.
+    match = rawBaseName.match(new RegExp(`(?:^|[\\s_-])(\\d{1,2})(?:st|nd|rd|th)?[\\s._/-]+(${monthPattern})[,]?[\\s._/-]+(\\d{2}|\\d{4})$`, "i"));
+    if (match) {
+      const month = months[match[2].toLowerCase()];
+      const parsed = month ? finish(match, match[3], month, match[1]) : null;
+      if (parsed) return parsed;
+    }
+
+    // Month/year only: 08-2026, 08_2026, 08.2026, 08/2026.
+    match = rawBaseName.match(/(?:^|[\s_-])(\d{1,2})[-_.\/](\d{4})$/);
+    if (match) {
+      const parsed = finish(match, match[2], match[1]);
+      if (parsed) return parsed;
+    }
+
+    // Written month/year: August 2026, Aug-2026, Aug_2026, etc.
+    match = rawBaseName.match(new RegExp(`(?:^|[\\s_-])(${monthPattern})[\\s._/-]+(\\d{4})$`, "i"));
+    if (match) {
+      const month = months[match[1].toLowerCase()];
+      const parsed = month ? finish(match, match[2], month) : null;
+      if (parsed) return parsed;
+    }
+
+    return { name: cleanName(rawBaseName), date: "" };
   }
 
   function safeTime(value) {
