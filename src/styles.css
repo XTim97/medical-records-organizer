@@ -581,3 +581,59 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Doctors list: restore separate, touch-friendly buttons */
+.doctor-buttons {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  max-width: 760px;
+}
+
+.doctor-buttons .record-with-document {
+  width: 100%;
+  margin: 0;
+}
+
+.doctor-summary-button {
+  width: 100%;
+  min-height: 72px;
+  padding: 14px 18px;
+  border: 2px solid #2563eb;
+  border-radius: 12px;
+  background: #dbeafe;
+  color: #111827;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  text-align: left;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.doctor-summary-button span {
+  display: inline-block;
+}
+
+.doctor-summary-name {
+  font-weight: 800;
+}
+
+.doctor-summary-button:hover {
+  background: #bfdbfe;
+}
+
+.doctor-summary-button:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 700px) {
+  .doctor-summary-button {
+    min-height: 78px;
+    padding: 14px 16px;
+  }
+}
