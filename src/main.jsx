@@ -3,6 +3,9 @@ import ReactDOM from "react-dom/client";
 import "./App.css";
 import "./styles.css";
 import { supabase } from "./supabase";
+const REMINDER_DAYS = [0,1,2,3,5,7,14,30];
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_MEDICAL_VAPID_PUBLIC_KEY || '';
+const decodeVapid = key => Uint8Array.from(atob(key.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-key.length%4)%4)), c=>c.charCodeAt(0));
 const sections = [
   { name: "Personal Information", className: "red" },
   { name: "Insurance Information", className: "orange" },
@@ -525,6 +528,10 @@ function App() {
     notes: "",
   });
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [appointmentNotifyEnabled,setAppointmentNotifyEnabled] = useState(false);
+  const [appointmentNotifyDays,setAppointmentNotifyDays] = useState(3);
+  const [pushStatus,setPushStatus] = useState('');
+  const [pushBusy,setPushBusy] = useState(false);
   const [editingAppointmentIndex, setEditingAppointmentIndex] = useState(null);
   const [appointmentView, setAppointmentView] = useState("menu");
 
@@ -1197,6 +1204,52 @@ function App() {
     }
   }
 
+  async function loadAppointmentReminders(userId) {
+    const {data,error}=await supabase.from('appointment_reminders').select('appointment_id,enabled,days_before').eq('user_id',userId);
+    if(error){console.error('Could not load appointment reminders',error);return [];}
+    return data || [];
+  }
+  async function enableAppointmentPush(){
+    if(!session?.user?.id)return;
+    if(!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)){
+      setPushStatus('Push is not supported here. On iPad use the installed Home Screen app.');return;
+    }
+    if(!VAPID_PUBLIC_KEY){setPushStatus('Notification service public key has not been configured yet.');return;}
+    setPushBusy(true);
+    try{
+      if(await Notification.requestPermission()!=='granted')throw Error('Notification permission not granted.');
+      const reg=await navigator.serviceWorker.register(import.meta.env.BASE_URL+'medical-push-sw.js',{scope:import.meta.env.BASE_URL});
+      const key=decodeVapid(VAPID_PUBLIC_KEY);
+      let sub=await reg.pushManager.getSubscription();
+      if(sub?.options?.applicationServerKey){
+        const prior=new Uint8Array(sub.options.applicationServerKey);
+        if(prior.length!==key.length||!prior.every((v,i)=>v===key[i])){await sub.unsubscribe();sub=null;}
+      }
+      if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+      const push=sub.toJSON();
+      const {error}=await supabase.from('appointment_push_subscriptions').upsert({
+        user_id:session.user.id,endpoint:sub.endpoint,p256dh:push.keys.p256dh,auth_key:push.keys.auth
+      },{onConflict:'endpoint'});
+      if(error)throw error;
+      setPushStatus('Notifications enabled for this device.');
+    }catch(error){setPushStatus('Could not enable notifications: '+error.message);}
+    finally{setPushBusy(false);}
+  }
+  async function disableAppointmentPush(){
+    if(!session?.user?.id||!('serviceWorker' in navigator))return;
+    setPushBusy(true);
+    try{
+      const reg=await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL);
+      const sub=await reg?.pushManager?.getSubscription();
+      if(sub){
+        const {error}=await supabase.from('appointment_push_subscriptions').delete().eq('user_id',session.user.id).eq('endpoint',sub.endpoint);
+        if(error)throw error;
+        await sub.unsubscribe();
+      }
+      setPushStatus('Notifications disabled for this device.');
+    }catch(error){setPushStatus('Could not disable notifications: '+error.message);}
+    finally{setPushBusy(false);}
+  }
   async function loadAppointments(userId) {
     const { data, error } = await supabase
       .from("appointments")
@@ -1211,7 +1264,13 @@ function App() {
     }
 
     if (data?.length) {
-      const items = data.map(appointmentFromRow);
+      const settings=await loadAppointmentReminders(userId);
+      const byId=new Map(settings.map(row=>[String(row.appointment_id),row]));
+      const items=data.map(row=>{
+        const item=appointmentFromRow(row);
+        const setting=byId.get(String(item.id));
+        return {...item,notifyEnabled:setting?.enabled===true,notifyDays:setting?.days_before??3};
+      });
       setAppointments(items);
       cacheAppointments(items);
       return;
@@ -1452,6 +1511,8 @@ function App() {
       reason: "",
       notes: "",
     });
+    setAppointmentNotifyEnabled(false);
+    setAppointmentNotifyDays(3);
   };
 
   async function deleteAppointment(appointmentToDelete) {
@@ -1515,6 +1576,14 @@ function App() {
       );
     }
 
+    if(savedId){
+      const {error:reminderError}=await supabase.from('appointment_reminders').upsert({
+        user_id:userId,appointment_id:savedId,enabled:appointmentNotifyEnabled,days_before:appointmentNotifyDays
+      },{onConflict:'appointment_id'});
+      if(reminderError){console.error('Reminder save failed',reminderError);window.alert('Appointment saved but reminder settings could not be saved. Notification database setup may be pending.');}
+    }
+    setAppointmentNotifyEnabled(false);
+    setAppointmentNotifyDays(3);
     const savedAppointment = { ...appointmentForm, id: savedId };
 
     setAppointmentForm({ date: "", time: "", doctor: "", specialty: "", location: "", reason: "", notes: "" });
@@ -4197,6 +4266,7 @@ if (activeSection?.name === "Appointments") {
       {selectedAppointment.location && <p><strong>Location:</strong> {selectedAppointment.location}</p>}
       {selectedAppointment.reason && <p><strong>Reason for Visit:</strong> {selectedAppointment.reason}</p>}
       {selectedAppointment.notes && <p><strong>Notes:</strong> {selectedAppointment.notes}</p>}
+      <p><strong>Notifications:</strong> {selectedAppointment.notifyEnabled ? 'Daily starting '+(selectedAppointment.notifyDays??3)+' days before' : 'Off'}</p>
       <button
         className="document-button"
         type="button"
@@ -4211,6 +4281,8 @@ if (activeSection?.name === "Appointments") {
       </button>
       <button onClick={() => {
         setAppointmentForm(selectedAppointment);
+        setAppointmentNotifyEnabled(selectedAppointment.notifyEnabled===true);
+        setAppointmentNotifyDays(selectedAppointment.notifyDays??3);
         setEditingAppointmentIndex(appointments.findIndex((appointment) => appointment.id === selectedAppointment.id));
         setSelectedAppointment(null);
         clearPendingDocument(); setAppointmentView("new");
@@ -4261,6 +4333,13 @@ if (activeSection?.name === "Appointments") {
             setAppointmentView("past");
           }}>Past Appointments</button>
         </div>
+        <div className="form-card" style={{marginTop:'1rem'}}>
+          <h2>Appointment Notifications — This Device</h2>
+          <p>Enable notifications separately on your iPad and Galaxy. On iPad use the installed Home Screen app.</p>
+          <button type="button" disabled={pushBusy} onClick={enableAppointmentPush}>Enable Notifications Here</button>
+          <button type="button" disabled={pushBusy} onClick={disableAppointmentPush}>Disable on This Device</button>
+          {pushStatus && <p role="status">{pushStatus}</p>}
+        </div>
       </main>
     );
   }
@@ -4288,6 +4367,15 @@ if (activeSection?.name === "Appointments") {
           <input type="text" value={appointmentForm.reason} onChange={(e) => setAppointmentForm({ ...appointmentForm, reason: e.target.value })} />
           <label>Notes</label>
           <textarea rows="4" value={appointmentForm.notes} onChange={(e) => setAppointmentForm({ ...appointmentForm, notes: e.target.value })} />
+          <label htmlFor="appointment-reminders">Notifications</label>
+          <label><input id="appointment-reminders" type="checkbox" checked={appointmentNotifyEnabled} onChange={e=>setAppointmentNotifyEnabled(e.target.checked)} /> Enable appointment reminders</label>
+          {appointmentNotifyEnabled && <>
+            <label htmlFor="appointment-reminder-days">Start reminding me</label>
+            <select id="appointment-reminder-days" value={appointmentNotifyDays} onChange={e=>setAppointmentNotifyDays(Number(e.target.value))}>
+              {REMINDER_DAYS.map(day=><option key={day} value={day}>{day===0?'On appointment day':day+' day'+(day===1?'':'s')+' before'}</option>)}
+            </select>
+            <p>Daily reminders through the appointment date. Also enable notifications on each device.</p>
+          </>}
         </div>
         <button onClick={saveAppointment}>
           {editingAppointmentIndex !== null ? "Update Appointment" : "Add Appointment"}
