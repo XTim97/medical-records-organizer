@@ -1511,6 +1511,8 @@ function App() {
       reason: "",
       notes: "",
     });
+    setAppointmentNotifyEnabled(false);
+    setAppointmentNotifyDays(3);
   };
 
   async function deleteAppointment(appointmentToDelete) {
